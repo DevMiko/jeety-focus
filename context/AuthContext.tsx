@@ -191,28 +191,40 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // ─── Login ──────────────────────────────────────────────────────────────────
 
   const login = async (email: string, password: string): Promise<boolean> => {
-    let success = false;
     setLoginError(null);
-    await apiAction({
-      action: 'login-api',
-      username: email,
-      password: password,
-      geolat: location?.latitude ?? 0,
-      geolng: location?.longitude ?? 0,
-    }, async (res) => {
-      const profile = mapApiUserProfile(res.data.data);
-      setUserData(profile);
-      setUserToken(res.data.token!);
-      await secureSave('usertoken', res.data.token!);
-      await asyncSave('userdata', JSON.stringify(profile));
-      const apiDossiers = (res.data.data?.dossiers || []).map(mapApiDossier);
-      setDossiers(apiDossiers);
-      await asyncSave('dossiers', JSON.stringify(apiDossiers));
-      success = true;
-    }, (message) => {
-      setLoginError(message);
-    });
-    return success;
+    setIsLoading(true);
+
+    try {
+      const res = await axios.post(APP_BASE_URL + 'api/api.php', {
+        action: 'login-api',
+        username: email,
+        password: password,
+        geolat: location?.latitude ?? 0,
+        geolng: location?.longitude ?? 0,
+      });
+
+      setIsLoading(false);
+
+      if (res.data.code === 'SUCCESS') {
+        const profile = mapApiUserProfile(res.data.data);
+        setUserData(profile);
+        setUserToken(res.data.token!);
+        await secureSave('usertoken', res.data.token!);
+        await asyncSave('userdata', JSON.stringify(profile));
+        const apiDossiers = (res.data.data?.dossiers || []).map(mapApiDossier);
+        setDossiers(apiDossiers);
+        await asyncSave('dossiers', JSON.stringify(apiDossiers));
+        return true;
+      } else {
+        setLoginError(res.data.message || 'Identifiants incorrects');
+        return false;
+      }
+    } catch (e) {
+      setIsLoading(false);
+      setLoginError('Connexion au serveur impossible');
+      console.log('Login error:', e);
+      return false;
+    }
   };
 
   // ─── Récupérer les données utilisateur ──────────────────────────────────────
