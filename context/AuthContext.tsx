@@ -1,11 +1,10 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
-import axios from 'axios';
-import * as SecureStore from 'expo-secure-store';
+import type { Dossier, DossierType, Role, UserProfile } from '@/constants/mock-data';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import NetInfo from '@react-native-community/netinfo';
+import axios from 'axios';
 import * as Location from 'expo-location';
-import type { Role, UserProfile, Dossier, DossierType } from '@/constants/mock-data';
-import { USERS } from '@/constants/mock-data';
+import * as SecureStore from 'expo-secure-store';
+import React, { createContext, useContext, useEffect, useState } from 'react';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 

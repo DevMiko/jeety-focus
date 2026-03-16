@@ -11,7 +11,6 @@
 // Pour les appels API Jeety internes, utiliser AuthContext.apiAction()
 // ─────────────────────────────────────────────────────────────────────────────
 
-import axios from 'axios';
 
 const CERTIFICALL_API_KEY = 'YOUR_API_KEY_HERE';
 const CERTIFICALL_API_URL = 'https://api.certificall.fr/v1'; // à confirmer avec Certificall

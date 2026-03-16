@@ -1,7 +1,7 @@
-import React, { createContext, useContext } from 'react';
 import type { Role, UserProfile } from '@/constants/mock-data';
 import { USERS } from '@/constants/mock-data';
 import { useAuth } from '@/context/AuthContext';
+import React, { createContext, useContext } from 'react';
 
 interface RoleContextType {
   role: Role | null;
