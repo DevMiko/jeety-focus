@@ -4,6 +4,7 @@ import NetInfo from '@react-native-community/netinfo';
 import axios from 'axios';
 import * as Location from 'expo-location';
 import * as SecureStore from 'expo-secure-store';
+import * as SplashScreen from 'expo-splash-screen';
 import React, { createContext, useContext, useEffect, useState } from 'react';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -361,6 +362,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } catch (e) {
       console.log(`Restore token error: ${e}`);
     }
+
+    await SplashScreen.hideAsync();
   };
 
   // ─── Effets au montage ──────────────────────────────────────────────────────
