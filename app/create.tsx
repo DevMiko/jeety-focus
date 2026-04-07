@@ -1,9 +1,11 @@
 import type { DossierType } from '@/constants/mock-data';
 import { Colors, FontSize, FontWeight, Radius, Shadows } from '@/constants/theme';
+import { useAuth } from '@/context/AuthContext';
 import { useRole } from '@/hooks/use-role';
 import { useRouter } from 'expo-router';
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
+    ActivityIndicator,
     Alert,
     KeyboardAvoidingView,
     Platform,
@@ -16,8 +18,8 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-// ─── Autocomplete suggestions ──────────────────────────────────────────────
-const ADDRESS_SUGGESTIONS = [
+// ─── Fallback data (utilisé si l’API ne répond pas) ───────────────────────
+const FALLBACK_ADDRESSES = [
   '12 rue des Lilas, 75011 Paris',
   '8 av. Victor Hugo, 69006 Lyon',
   '25 chemin des Vignes, 33000 Bordeaux',
@@ -27,7 +29,7 @@ const ADDRESS_SUGGESTIONS = [
   '2 rue de la Liberté, 13000 Marseille',
 ];
 
-const DONNEUR_OPTIONS = ['Dupont Énergies', 'Isol Therm SARL', 'Clim Plus SARL'];
+const FALLBACK_DONNEURS = ['Dupont Énergies', 'Isol Therm SARL', 'Clim Plus SARL'];
 
 // ─── Step Number Badge ─────────────────────────────────────────────────────
 function StepNum({ n }: { n: number }) {
@@ -101,12 +103,65 @@ function PhaseOption({
 export default function CreateScreen() {
   const router = useRouter();
   const { role } = useRole();
+  const auth = useAuth();
 
   // Section 1 state
   const [address, setAddress] = useState('');
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [donneurOrdre, setDonneurOrdre] = useState('');
   const [showDonneurPicker, setShowDonneurPicker] = useState(false);
+
+  // Dynamic data with fallback
+  const [addressSuggestions, setAddressSuggestions] = useState<string[]>([]);
+  const [searchingAddresses, setSearchingAddresses] = useState(false);
+  const [donneurOptions, setDonneurOptions] = useState<string[]>(FALLBACK_DONNEURS);
+  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Load donneurs d'ordre from API on mount
+  useEffect(() => {
+    (async () => {
+      try {
+        const donneurs = await auth.getDonneurs();
+        if (donneurs.length > 0) {
+          setDonneurOptions(donneurs.map((d) => d.name));
+        }
+      } catch {
+        // Fallback already set
+      }
+    })();
+  }, []);
+
+  // Debounced address search
+  const handleAddressChange = useCallback((value: string) => {
+    setAddress(value);
+    if (value.length < 2) {
+      setShowSuggestions(false);
+      setAddressSuggestions([]);
+      return;
+    }
+    setShowSuggestions(true);
+    if (searchTimer.current) clearTimeout(searchTimer.current);
+    searchTimer.current = setTimeout(async () => {
+      setSearchingAddresses(true);
+      try {
+        const results = await auth.searchAddresses(value);
+        if (results.length > 0) {
+          setAddressSuggestions(results);
+        } else {
+          // Fallback: filter local mock addresses
+          setAddressSuggestions(
+            FALLBACK_ADDRESSES.filter((a) => a.toLowerCase().includes(value.toLowerCase()))
+          );
+        }
+      } catch {
+        setAddressSuggestions(
+          FALLBACK_ADDRESSES.filter((a) => a.toLowerCase().includes(value.toLowerCase()))
+        );
+      } finally {
+        setSearchingAddresses(false);
+      }
+    }, 400);
+  }, [auth]);
 
   // Section 2
   const [phase, setPhase] = useState<'avant' | 'apres' | null>(null);
@@ -120,11 +175,7 @@ export default function CreateScreen() {
     );
   };
 
-  const filteredSuggestions = address.length > 1
-    ? ADDRESS_SUGGESTIONS.filter((a) =>
-        a.toLowerCase().includes(address.toLowerCase())
-      )
-    : [];
+  const filteredSuggestions = addressSuggestions;
 
   const canSubmit =
     (role === 'artisan' ? address.trim().length > 3 : true) &&
@@ -189,14 +240,14 @@ export default function CreateScreen() {
                 <TextInput
                   style={styles.input}
                   value={address}
-                  onChangeText={(v) => {
-                    setAddress(v);
-                    setShowSuggestions(v.length > 1);
-                  }}
+                  onChangeText={handleAddressChange}
                   placeholder="Adresse du bénéficiaire..."
                   placeholderTextColor={Colors.gray400}
                   onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
                 />
+                {searchingAddresses && (
+                  <ActivityIndicator size="small" color={Colors.blue} style={{ position: 'absolute', right: 12, top: 14 }} />
+                )}
                 {showSuggestions && filteredSuggestions.length > 0 && (
                   <View style={styles.dropdown}>
                     {filteredSuggestions.map((s, i) => (
@@ -231,7 +282,7 @@ export default function CreateScreen() {
                 </TouchableOpacity>
                 {showDonneurPicker && (
                   <View style={styles.dropdown}>
-                    {DONNEUR_OPTIONS.map((d) => (
+                    {donneurOptions.map((d) => (
                       <TouchableOpacity
                         key={d}
                         style={styles.dropdownItem}

@@ -131,6 +131,27 @@ export default function ProfilScreen() {
       }))
     : SOUS_TRAITANTS;
 
+  // Real API handlers for invitations
+  const handleInviteOuvrier = async (m: typeof ouvriers[0]) => {
+    const success = await auth.inviteMember('ouvrier', m.id);
+    Alert.alert(
+      'Invitation envoyée',
+      success
+        ? `SMS envoyé à ${m.phone}`
+        : `L'invitation sera envoyée dès que la connexion sera rétablie.`
+    );
+  };
+
+  const handleInviteST = async (st: typeof sousTraitants[0]) => {
+    const success = await auth.inviteMember('sous-traitant', st.id);
+    Alert.alert(
+      'Invitation',
+      success
+        ? `Invitation envoyée à ${st.name}`
+        : `L'invitation sera envoyée dès que la connexion sera rétablie.`
+    );
+  };
+
   const handleChangePassword = async () => {
     if (!oldPassword || !newPassword) {
       Alert.alert('Erreur', 'Veuillez remplir les deux champs');
@@ -194,7 +215,7 @@ export default function ProfilScreen() {
               <MembreCard
                 key={m.id}
                 membre={m}
-                onInvite={() => Alert.alert('Invitation envoyée', `SMS envoyé à ${m.phone}`)}
+                onInvite={() => handleInviteOuvrier(m)}
               />
             ))}
             <AddMembreCard
@@ -229,7 +250,7 @@ export default function ProfilScreen() {
                   {!st.hasJeety && (
                     <TouchableOpacity
                       style={styles.inviteStBtn}
-                      onPress={() => Alert.alert('Invitation', `Envoyer une invitation à ${st.name} ?`)}
+                      onPress={() => handleInviteST(st)}
                     >
                       <Text style={styles.inviteStText}>Inviter</Text>
                     </TouchableOpacity>

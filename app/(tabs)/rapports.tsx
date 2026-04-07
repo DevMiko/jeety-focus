@@ -5,11 +5,14 @@ import { SearchBar } from '@/components/ui/search-bar';
 import type { DossierType, RapportLibre } from '@/constants/mock-data';
 import { RAPPORTS_LIBRES } from '@/constants/mock-data';
 import { Colors, FontSize, FontWeight, Radius, Shadows } from '@/constants/theme';
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const jeetyLogo = require('@/assets/images/splash-icon.png');
 import { useAuth } from '@/context/AuthContext';
 import { useRole } from '@/hooks/use-role';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
+  Image,
   ScrollView,
   StyleSheet,
   Text,
@@ -123,9 +126,7 @@ export default function RapportsScreen() {
       <View style={styles.header}>
         <View style={styles.headerTop}>
           <View style={styles.headerLogo}>
-            <View style={styles.focusIcon}>
-              <Text style={styles.focusIconText}>📷</Text>
-            </View>
+            <Image source={jeetyLogo} style={styles.focusIconImg} />
             <Text style={styles.logoText}>Jeety Focus</Text>
           </View>
           <Avatar initials={user?.initials ?? 'JD'} size={32} backgroundColor={Colors.pink} borderRadius={10} />
@@ -183,8 +184,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
   },
   headerLogo: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  focusIcon: { width: 28, height: 28, backgroundColor: Colors.pink, borderRadius: 6, alignItems: 'center', justifyContent: 'center' },
-  focusIconText: { fontSize: 16 },
+  focusIconImg: { width: 28, height: 28, borderRadius: 6 },
   logoText: { fontSize: FontSize['3xl'], fontWeight: FontWeight.extrabold, color: Colors.white },
   // Phase filters
   phaseFilters: {

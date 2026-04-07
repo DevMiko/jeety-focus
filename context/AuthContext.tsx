@@ -66,6 +66,17 @@ interface AuthContextType {
   updateProfile: (fields: Record<string, string>) => Promise<boolean>;
   changePassword: (oldPsw: string, newPsw: string) => Promise<string | null>;
 
+  // ─── Team actions ───────────────────────────────────────────────────────────
+  addOuvrier: (firstName: string, lastName: string, phone: string) => Promise<boolean>;
+  removeOuvrier: (idOuvrier: number | string) => Promise<boolean>;
+  inviteMember: (type: 'ouvrier' | 'sous-traitant', id: number | string) => Promise<boolean>;
+
+  // ─── Dynamic data ───────────────────────────────────────────────────────────
+  searchAddresses: (query: string) => Promise<string[]>;
+  getDonneurs: () => Promise<{ id: string; name: string }[]>;
+  saveChecklist: (dossierId: string, phase: string, checkedItems: string[]) => Promise<boolean>;
+  loadChecklist: (dossierId: string, phase: string) => Promise<string[]>;
+
   // ─── Storage helpers ────────────────────────────────────────────────────────
   asyncSave: (key: string, value: string) => Promise<void>;
   secureSave: (key: string, value: string) => Promise<void>;
@@ -381,6 +392,130 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
   };
 
+  // ─── Add ouvrier ────────────────────────────────────────────────────────────
+
+  const addOuvrier = async (firstName: string, lastName: string, phone: string): Promise<boolean> => {
+    if (!usertoken) return false;
+    return new Promise((resolve) => {
+      apiAction({
+        action: 'add-ouvrier',
+        token: usertoken,
+        prenom: firstName,
+        nom: lastName,
+        telephone: phone,
+      }, () => {
+        refreshTeam();
+        resolve(true);
+      }, () => {
+        resolve(false);
+      });
+    });
+  };
+
+  // ─── Remove ouvrier ─────────────────────────────────────────────────────────
+
+  const removeOuvrier = async (idOuvrier: number | string): Promise<boolean> => {
+    if (!usertoken) return false;
+    return new Promise((resolve) => {
+      apiAction({
+        action: 'remove-ouvrier',
+        token: usertoken,
+        id_ouvrier: idOuvrier,
+      }, () => {
+        refreshTeam();
+        resolve(true);
+      }, () => {
+        resolve(false);
+      });
+    });
+  };
+
+  // ─── Invite member ──────────────────────────────────────────────────────────
+
+  const inviteMember = async (type: 'ouvrier' | 'sous-traitant', id: number | string): Promise<boolean> => {
+    if (!usertoken) return false;
+    return new Promise((resolve) => {
+      apiAction({
+        action: 'invite-member',
+        token: usertoken,
+        type,
+        id_member: id,
+      }, () => {
+        resolve(true);
+      }, () => {
+        resolve(false);
+      });
+    });
+  };
+
+  // ─── Search addresses ───────────────────────────────────────────────────────
+
+  const searchAddresses = async (query: string): Promise<string[]> => {
+    if (!usertoken) return [];
+    return new Promise((resolve) => {
+      apiAction({
+        action: 'search-addresses',
+        token: usertoken,
+        query,
+      }, (res) => {
+        resolve(res.data.addresses || []);
+      }, () => {
+        resolve([]);
+      });
+    });
+  };
+
+  // ─── Get donneurs d'ordre ───────────────────────────────────────────────────
+
+  const getDonneurs = async (): Promise<{ id: string; name: string }[]> => {
+    if (!usertoken) return [];
+    return new Promise((resolve) => {
+      apiAction({
+        action: 'get-donneurs',
+        token: usertoken,
+      }, (res) => {
+        resolve(res.data.donneurs || []);
+      }, () => {
+        resolve([]);
+      });
+    });
+  };
+
+  // ─── Save checklist ─────────────────────────────────────────────────────────
+
+  const saveChecklist = async (dossierId: string, phase: string, checkedItems: string[]): Promise<boolean> => {
+    // Always persist locally first
+    const key = `checklist_${dossierId}_${phase}`;
+    await asyncSave(key, JSON.stringify(checkedItems));
+    if (!usertoken) return false;
+    return new Promise((resolve) => {
+      apiAction({
+        action: 'save-checklist',
+        token: usertoken,
+        id_dossier: dossierId,
+        phase,
+        checked_items: checkedItems,
+      }, () => {
+        resolve(true);
+      }, () => {
+        resolve(false);
+      });
+    });
+  };
+
+  // ─── Load checklist ─────────────────────────────────────────────────────────
+
+  const loadChecklist = async (dossierId: string, phase: string): Promise<string[]> => {
+    const key = `checklist_${dossierId}_${phase}`;
+    try {
+      const saved = await getAsyncData(key);
+      if (saved) return JSON.parse(saved);
+    } catch (e) {
+      console.log('loadChecklist local error:', e);
+    }
+    return [];
+  };
+
   // ─── Logout ─────────────────────────────────────────────────────────────────
 
   const doLogout = async () => {
@@ -553,6 +688,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         createRapport,
         updateProfile,
         changePassword,
+        addOuvrier,
+        removeOuvrier,
+        inviteMember,
+        searchAddresses,
+        getDonneurs,
+        saveChecklist,
+        loadChecklist,
         asyncSave,
         secureSave,
       }}

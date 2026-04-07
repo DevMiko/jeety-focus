@@ -1,13 +1,19 @@
 import { AuthProvider } from '@/context/AuthContext';
 import { RoleProvider } from '@/hooks/use-role';
+import { initCertificall } from '@/services/certificall';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
+import { useEffect } from 'react';
 import 'react-native-reanimated';
 
 SplashScreen.preventAutoHideAsync();
 
 export default function RootLayout() {
+  useEffect(() => {
+    initCertificall().catch(console.warn);
+  }, []);
+
   return (
     <AuthProvider>
       <RoleProvider>

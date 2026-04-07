@@ -16,11 +16,14 @@ import {
     DOSSIERS_SOUSTRAITANT,
 } from '@/constants/mock-data';
 import { Colors, FontSize, FontWeight, Radius } from '@/constants/theme';
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const jeetyLogo = require('@/assets/images/splash-icon.png');
 import { useAuth } from '@/context/AuthContext';
 import { useRole } from '@/hooks/use-role';
 import { useRouter } from 'expo-router';
 import React, { useMemo, useState } from 'react';
 import {
+    Image,
     ScrollView,
     StyleSheet,
     Text,
@@ -105,9 +108,7 @@ export default function ListScreen() {
       <View style={styles.header}>
         <View style={styles.headerTop}>
           <View style={styles.headerLogo}>
-            <View style={styles.focusIcon}>
-              <Text style={styles.focusIconText}>📷</Text>
-            </View>
+            <Image source={jeetyLogo} style={styles.focusIconImg} />
             <Text style={styles.logoText}>Jeety Focus</Text>
           </View>
           <View style={styles.headerUser}>
@@ -243,15 +244,11 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
   },
   headerLogo: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  focusIcon: {
+  focusIconImg: {
     width: 28,
     height: 28,
-    backgroundColor: Colors.pink,
     borderRadius: 6,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
-  focusIconText: { fontSize: 16 },
   logoText: { fontSize: FontSize['3xl'], fontWeight: FontWeight.extrabold, color: Colors.white },
   headerUser: {
     flexDirection: 'row',

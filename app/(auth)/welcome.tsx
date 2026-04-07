@@ -4,6 +4,7 @@ import { useRole } from '@/hooks/use-role';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import {
+    Image,
     ScrollView,
     StyleSheet,
     Text,
@@ -118,7 +119,7 @@ export default function WelcomeScreen() {
         {/* Logo */}
         <View style={styles.logoWrapper}>
           <View style={styles.logoIconBox}>
-            <Text style={styles.logoIconEmoji}>📷</Text>
+            <Image source={require('@/assets/images/splash-icon.png')} style={styles.logoImage} />
           </View>
           <Text style={styles.logoText}>
             Jeety <Text style={styles.logoPink}>Focus</Text>
@@ -203,8 +204,10 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     ...Shadows.lg,
   },
-  logoIconEmoji: {
-    fontSize: 28,
+  logoImage: {
+    width: 48,
+    height: 48,
+    borderRadius: 10,
   },
   logoText: {
     color: Colors.white,

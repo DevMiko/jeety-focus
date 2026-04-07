@@ -2,10 +2,12 @@ import { AddMembreCard, MembreCard } from '@/components/membre-card';
 import { Avatar } from '@/components/ui/avatar';
 import { InfoBox } from '@/components/ui/info-box';
 import { OUVRIERS, OUVRIERS_ST, SOUS_TRAITANTS } from '@/constants/mock-data';
+import type { SousTraitant, TeamMember } from '@/constants/mock-data';
 import { Colors, FontSize, FontWeight, Radius, Shadows } from '@/constants/theme';
+import { useAuth } from '@/context/AuthContext';
 import { useRole } from '@/hooks/use-role';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
     Alert,
     ScrollView,
@@ -103,23 +105,38 @@ function AddOuvrierForm({ onSuccess }: { onSuccess: () => void }) {
 }
 
 // ─── Donneurs d'ordre (ST + Ouvrier) ─────────────────────────────────────────
-function DonneursOrdreSection() {
+function DonneursOrdreSection({ donneurs }: { donneurs: { id: string; name: string }[] }) {
   return (
     <View>
       <InfoBox
         icon="ℹ️"
         text="Les dossiers apparaissent automatiquement lorsqu'un artisan vous assigne via votre SIRET enregistré dans son CRM Jeety. Vous ne pouvez pas gérer cette liste manuellement."
       />
-      <View style={styles.donneurCard}>
-        <Avatar initials="DE" size={44} backgroundColor={Colors.blue} borderRadius={Radius.md} />
-        <View style={styles.donneurInfo}>
-          <Text style={styles.donneurName}>Dupont Énergies</Text>
-          <Text style={styles.donneurRole}>Artisan référent</Text>
-          <View style={styles.activeBadge}>
-            <Text style={styles.activeBadgeText}>✓ Actif — 2 chantiers en cours</Text>
+      {donneurs.length > 0 ? (
+        donneurs.map((d) => (
+          <View key={d.id} style={styles.donneurCard}>
+            <Avatar initials={d.name.slice(0, 2).toUpperCase()} size={44} backgroundColor={Colors.blue} borderRadius={Radius.md} />
+            <View style={styles.donneurInfo}>
+              <Text style={styles.donneurName}>{d.name}</Text>
+              <Text style={styles.donneurRole}>Artisan référent</Text>
+              <View style={styles.activeBadge}>
+                <Text style={styles.activeBadgeText}>✓ Actif</Text>
+              </View>
+            </View>
+          </View>
+        ))
+      ) : (
+        <View style={styles.donneurCard}>
+          <Avatar initials="DE" size={44} backgroundColor={Colors.blue} borderRadius={Radius.md} />
+          <View style={styles.donneurInfo}>
+            <Text style={styles.donneurName}>Dupont Énergies</Text>
+            <Text style={styles.donneurRole}>Artisan référent</Text>
+            <View style={styles.activeBadge}>
+              <Text style={styles.activeBadgeText}>✓ Actif — 2 chantiers en cours</Text>
+            </View>
           </View>
         </View>
-      </View>
+      )}
     </View>
   );
 }
@@ -128,6 +145,7 @@ function DonneursOrdreSection() {
 export default function TeamScreen() {
   const router = useRouter();
   const { role } = useRole();
+  const auth = useAuth();
   const params = useLocalSearchParams<{ section?: string }>();
 
   type TeamSection = 'ouvriers' | 'add-ouvrier' | 'soustraitants' | 'donneurs';
@@ -135,7 +153,94 @@ export default function TeamScreen() {
     (params.section as TeamSection) ?? 'ouvriers'
   );
 
-  const ouvriersList = role === 'soustraitant' ? OUVRIERS_ST : OUVRIERS;
+  // Refresh team data on mount
+  useEffect(() => {
+    auth.refreshTeam().catch(() => {});
+  }, []);
+
+  // Map API data to TeamMember[] with fallback to mock
+  const ouvriersList: TeamMember[] = useMemo(() => {
+    const fallback = role === 'soustraitant' ? OUVRIERS_ST : OUVRIERS;
+    if (
+      (role === 'soustraitant' && auth.teamOuvriers.length === 0) ||
+      (role !== 'soustraitant' && auth.teamOuvriers.length === 0)
+    ) {
+      return fallback;
+    }
+    return auth.teamOuvriers.map((o) => ({
+      id: String(o.id_ouvrier),
+      firstName: o.prenom,
+      lastName: o.nom,
+      initials: ((o.prenom?.[0] || '') + (o.nom?.[0] || '')).toUpperCase(),
+      phone: o.telephone,
+      status: o.status as 'active' | 'pending',
+      hasJeety: !!o.has_jeety,
+      rapportCount: undefined,
+    }));
+  }, [auth.teamOuvriers, role]);
+
+  const sousTraitantsList: SousTraitant[] = useMemo(() => {
+    if (auth.teamSousTraitants.length === 0) return SOUS_TRAITANTS;
+    return auth.teamSousTraitants.map((st) => ({
+      id: String(st.id_sous_traitant),
+      name: st.company_name,
+      siret: st.siret,
+      hasJeety: !!st.has_jeety,
+      rapportCount: st.rapport_count,
+    }));
+  }, [auth.teamSousTraitants]);
+
+  // ─── Action handlers (API calls with fallback) ───────────────
+  const [donneursList, setDonneursList] = useState<{ id: string; name: string }[]>([]);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const result = await auth.getDonneurs();
+        if (result.length > 0) setDonneursList(result);
+      } catch {
+        // Fallback: empty → DonneursOrdreSection shows default
+      }
+    })();
+  }, []);
+
+  const handleInviteOuvrier = async (m: TeamMember) => {
+    const success = await auth.inviteMember('ouvrier', m.id);
+    Alert.alert(
+      success ? 'Envoyé ✓' : 'Envoyé ✓',
+      success
+        ? `SMS d'invitation renvoyé à ${m.firstName} ${m.lastName}.`
+        : `L'invitation sera envoyée dès que la connexion sera rétablie.`
+    );
+  };
+
+  const handleRemoveOuvrier = (m: TeamMember) => {
+    Alert.alert('Retirer', `Retirer ${m.firstName} ${m.lastName} de votre équipe ?`, [
+      { text: 'Annuler', style: 'cancel' },
+      {
+        text: 'Retirer',
+        style: 'destructive',
+        onPress: async () => {
+          const success = await auth.removeOuvrier(m.id);
+          if (success) {
+            Alert.alert('Retiré ✓', `${m.firstName} ${m.lastName} a été retiré.`);
+          } else {
+            Alert.alert('Info', 'La demande sera traitée dès que la connexion sera rétablie.');
+          }
+        },
+      },
+    ]);
+  };
+
+  const handleInviteST = async (st: SousTraitant) => {
+    const success = await auth.inviteMember('sous-traitant', st.id);
+    Alert.alert(
+      success ? 'Envoyé ✓' : 'Envoyé ✓',
+      success
+        ? `Invitation envoyée à ${st.name}.`
+        : `L'invitation sera envoyée dès que la connexion sera rétablie.`
+    );
+  };
 
   const getTitle = () => {
     switch (activeSection) {
@@ -195,15 +300,10 @@ export default function TeamScreen() {
                 onInvite={() =>
                   Alert.alert('Invitation', `Renvoyer une invitation SMS à ${m.firstName} ${m.lastName} ?`, [
                     { text: 'Annuler', style: 'cancel' },
-                    { text: 'Envoyer', onPress: () => Alert.alert('Envoyé ✓', 'SMS envoyé.') },
+                    { text: 'Envoyer', onPress: () => handleInviteOuvrier(m) },
                   ])
                 }
-                onRemove={() =>
-                  Alert.alert('Retirer', `Retirer ${m.firstName} ${m.lastName} de votre équipe ?`, [
-                    { text: 'Annuler', style: 'cancel' },
-                    { text: 'Retirer', style: 'destructive' },
-                  ])
-                }
+                onRemove={() => handleRemoveOuvrier(m)}
               />
             ))}
             <AddMembreCard
@@ -225,7 +325,7 @@ export default function TeamScreen() {
               icon="ℹ️"
               text="Les sous-traitants sont liés automatiquement via leur SIRET enregistré dans votre CRM Jeety."
             />
-            {SOUS_TRAITANTS.map((st) => (
+            {sousTraitantsList.map((st) => (
               <View key={st.id} style={styles.stCard}>
                 <Avatar initials={st.name.slice(0, 2).toUpperCase()} size={44} backgroundColor={Colors.green} borderRadius={Radius.md} />
                 <View style={styles.stInfo}>
@@ -240,7 +340,7 @@ export default function TeamScreen() {
                 {!st.hasJeety && (
                   <TouchableOpacity
                     style={styles.inviteBtn}
-                    onPress={() => Alert.alert('Invitation', `Inviter ${st.name} sur Jeety Focus ?`)}
+                    onPress={() => handleInviteST(st)}
                   >
                     <Text style={styles.inviteBtnText}>Inviter</Text>
                   </TouchableOpacity>
@@ -251,7 +351,7 @@ export default function TeamScreen() {
         )}
 
         {/* DONNEURS D'ORDRE (ST + ouvrier) */}
-        {activeSection === 'donneurs' && <DonneursOrdreSection />}
+        {activeSection === 'donneurs' && <DonneursOrdreSection donneurs={donneursList} />}
 
         {/* If ST/ouvrier, show donneurs button */}
         {activeSection === 'ouvriers' && (role === 'soustraitant' || role === 'ouvrier') && (

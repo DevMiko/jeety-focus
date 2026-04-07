@@ -1,6 +1,7 @@
 import { Colors, FontSize, FontWeight, Radius, Shadows } from '@/constants/theme';
+import { useAuth } from '@/context/AuthContext';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import React from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
     Alert,
     StyleSheet,
@@ -12,6 +13,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function SuccessScreen() {
   const router = useRouter();
+  const auth = useAuth();
   const params = useLocalSearchParams<{
     phase?: string;
     dossierRef?: string;
@@ -19,6 +21,8 @@ export default function SuccessScreen() {
     reportNumber?: string;
     certifiedAt?: string;
     pdfUrl?: string;
+    types?: string;
+    address?: string;
   }>();
 
   const phase = params.phase ?? 'avant';
@@ -29,6 +33,33 @@ export default function SuccessScreen() {
     return `${now.getDate().toString().padStart(2, '0')}/${(now.getMonth() + 1).toString().padStart(2, '0')}/${now.getFullYear()} ${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
   })();
   const pdfUrl = params.pdfUrl ?? '';
+
+  // Send rapport to backend on mount (only once)
+  const sentRef = useRef(false);
+  const [synced, setSynced] = useState(false);
+
+  useEffect(() => {
+    if (sentRef.current) return;
+    sentRef.current = true;
+    (async () => {
+      try {
+        const rapportId = await auth.createRapport({
+          phase,
+          reference_rapport: rfNumber,
+          photo_count: Number(photoCount),
+          certified_at: certifiedAt,
+          types: params.types ?? '',
+          address: params.address ?? '',
+          dossier_ref: params.dossierRef ?? '',
+        });
+        if (rapportId) {
+          setSynced(true);
+        }
+      } catch {
+        // API not ready — data will be queued offline
+      }
+    })();
+  }, []);
 
   return (
     <SafeAreaView style={styles.screen}>
@@ -110,9 +141,12 @@ export default function SuccessScreen() {
 
         {/* Info box */}
         <View style={styles.infoBox}>
-          <Text style={styles.infoBoxIcon}>💡</Text>
+          <Text style={styles.infoBoxIcon}>{synced ? '✅' : '💡'}</Text>
           <Text style={styles.infoBoxText}>
-            Le rapport a été synchronisé avec votre CRM Jeety et est disponible dans l'onglet <Text style={styles.infoBoxBold}>Rapports libres</Text>.
+            {synced
+              ? <>Le rapport a été synchronisé avec votre CRM Jeety et est disponible dans l'onglet <Text style={styles.infoBoxBold}>Rapports libres</Text>.</>
+              : <>Le rapport sera synchronisé automatiquement dès que la connexion sera rétablie.</>
+            }
           </Text>
         </View>
       </View>

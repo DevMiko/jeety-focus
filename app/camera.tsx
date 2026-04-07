@@ -1,8 +1,14 @@
 import type { DossierType } from '@/constants/mock-data';
 import { PHOTOS_APRES, PHOTOS_AVANT } from '@/constants/mock-data';
 import { Colors, FontSize, FontWeight, Radius, Shadows } from '@/constants/theme';
-import type { CertifiedPhoto } from '@/services/certificall';
-import { submitReport } from '@/services/certificall';
+import type { PhotoResult } from '@/services/certificall';
+import {
+  SDK_AVAILABLE,
+  buildMockPhotoResult,
+  buildReportSummary,
+  buildReportToken,
+  takeCertifiedPhoto,
+} from '@/services/certificall';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as Location from 'expo-location';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -27,16 +33,18 @@ export default function CameraScreen() {
 
   const phase = (params.phase ?? 'avant') as 'avant' | 'apres';
   const types = (params.types ?? 'PAC').split(',') as DossierType[];
+  const dossierId = params.dossierId ?? 'DOSSIER';
+  const reportToken = buildReportToken(dossierId, phase);
 
   // Build photo list
-  const photos = Array.from(
+  const photoLabels = Array.from(
     new Set(
       types.flatMap((t) => (phase === 'avant' ? PHOTOS_AVANT[t] ?? [] : PHOTOS_APRES[t] ?? []))
     )
   );
-  const total = photos.length;
+  const total = photoLabels.length;
 
-  // ─── Permissions ─────────────────────────────────────────────────────────
+  // ─── Permissions (only needed in mock mode) ──────────────────────────────
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
   const [locationGranted, setLocationGranted] = useState(false);
 
@@ -50,8 +58,8 @@ export default function CameraScreen() {
   // ─── State ───────────────────────────────────────────────────────────────
   const cameraRef = useRef<CameraView>(null);
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [capturedPhotos, setCapturedPhotos] = useState<(CertifiedPhoto | null)[]>(
-    new Array(photos.length).fill(null)
+  const [capturedPhotos, setCapturedPhotos] = useState<(PhotoResult | null)[]>(
+    new Array(photoLabels.length).fill(null)
   );
   const [flash, setFlash] = useState(false);
   const [isCapturing, setIsCapturing] = useState(false);
@@ -68,8 +76,38 @@ export default function CameraScreen() {
     };
   };
 
-  // ─── Capture ─────────────────────────────────────────────────────────────
-  const handleCapture = async () => {
+  // ─── Capture via SDK Certificall ─────────────────────────────────────────
+  const handleCaptureSDK = async () => {
+    if (isCapturing || isSubmitting) return;
+    setIsCapturing(true);
+
+    try {
+      const result = await takeCertifiedPhoto(reportToken, {
+        label: photoLabels[currentIndex],
+        index: String(currentIndex),
+        phase,
+        dossierId,
+      });
+
+      const next = [...capturedPhotos];
+      next[currentIndex] = result;
+      setCapturedPhotos(next);
+
+      if (currentIndex < total - 1) {
+        setTimeout(() => setCurrentIndex((i) => i + 1), 350);
+      } else {
+        await finishSession([...next]);
+      }
+    } catch (err: any) {
+      if (err?.code === 'CANCELLED') return; // L'utilisateur a annulé — rien à faire
+      console.warn('Certificall capture error:', err);
+    } finally {
+      setIsCapturing(false);
+    }
+  };
+
+  // ─── Capture via expo-camera (fallback mock) ─────────────────────────────
+  const handleCaptureMock = async () => {
     if (isCapturing || isSubmitting) return;
     setIsCapturing(true);
 
@@ -84,7 +122,6 @@ export default function CameraScreen() {
       });
 
       let lat = 0, lng = 0;
-      let accuracy: number | undefined;
       if (locationGranted) {
         try {
           const pos = await Location.getCurrentPositionAsync({
@@ -92,29 +129,19 @@ export default function CameraScreen() {
           });
           lat = pos.coords.latitude;
           lng = pos.coords.longitude;
-          accuracy = pos.coords.accuracy ?? undefined;
         } catch (_) { /* GPS indisponible */ }
       }
 
-      const { iso } = getNow();
-      const certified: CertifiedPhoto = {
-        uri: photo?.uri ?? '',
-        latitude: lat,
-        longitude: lng,
-        accuracy,
-        timestamp: iso,
-        label: photos[currentIndex],
-        index: currentIndex,
-      };
+      const result = buildMockPhotoResult(reportToken, photo?.uri ?? '', lat, lng);
 
       const next = [...capturedPhotos];
-      next[currentIndex] = certified;
+      next[currentIndex] = result;
       setCapturedPhotos(next);
 
       if (currentIndex < total - 1) {
         setTimeout(() => setCurrentIndex((i) => i + 1), 350);
       } else {
-        await finishAndSubmit([...next]);
+        await finishSession([...next]);
       }
     } catch (err) {
       console.warn('Capture error:', err);
@@ -123,32 +150,35 @@ export default function CameraScreen() {
     }
   };
 
-  // ─── Submit to Certificall ────────────────────────────────────────────────
-  const finishAndSubmit = async (list: (CertifiedPhoto | null)[]) => {
+  const handleCapture = SDK_AVAILABLE ? handleCaptureSDK : handleCaptureMock;
+
+  // ─── Fin de session → navigation vers success ────────────────────────────
+  const finishSession = async (list: (PhotoResult | null)[]) => {
     setIsSubmitting(true);
-    const validPhotos = list.filter(Boolean) as CertifiedPhoto[];
+    const validPhotos = list.filter(Boolean) as PhotoResult[];
+
     try {
-      const result = await submitReport(validPhotos, params.dossierId ?? 'DOSSIER', phase);
+      const summary = buildReportSummary(validPhotos, reportToken);
       router.replace({
         pathname: '/success',
         params: {
           phase,
-          dossierRef: params.dossierId ?? '',
-          reportNumber: result.reportNumber,
-          certifiedAt: result.certifiedAtFormatted,
-          photoCount: result.photoCount.toString(),
-          pdfUrl: result.pdfUrl ?? '',
+          dossierRef: dossierId,
+          reportNumber: summary.reportToken,
+          certifiedAt: summary.certifiedAtFormatted,
+          photoCount: summary.photoCount.toString(),
+          pdfUrl: summary.pdfUrl,
         },
       });
     } catch (err) {
-      console.error('Certificall error:', err);
+      console.error('Session finish error:', err);
       setIsSubmitting(false);
       router.replace({
         pathname: '/success',
         params: {
           phase,
-          dossierRef: params.dossierId ?? '',
-          reportNumber: 'RF-ERREUR-RESEAU',
+          dossierRef: dossierId,
+          reportNumber: reportToken,
           certifiedAt: getNow().date,
           photoCount: validPhotos.length.toString(),
         },
@@ -158,8 +188,8 @@ export default function CameraScreen() {
 
   const { time, date } = getNow();
 
-  // ─── Permission: chargement ───────────────────────────────────────────────
-  if (!cameraPermission) {
+  // ─── Permission: chargement (mock mode uniquement) ────────────────────────
+  if (!SDK_AVAILABLE && !cameraPermission) {
     return (
       <SafeAreaView style={styles.permScreen}>
         <ActivityIndicator color={Colors.blue} size="large" />
@@ -167,8 +197,8 @@ export default function CameraScreen() {
     );
   }
 
-  // ─── Permission: refusée ─────────────────────────────────────────────────
-  if (!cameraPermission.granted) {
+  // ─── Permission: refusée (mock mode uniquement) ───────────────────────────
+  if (!SDK_AVAILABLE && !cameraPermission?.granted) {
     return (
       <SafeAreaView style={styles.permScreen}>
         <Text style={styles.permIcon}>📷</Text>
@@ -190,11 +220,13 @@ export default function CameraScreen() {
   return (
     <View style={styles.screen}>
 
-      {/* Vraie caméra en fond */}
-      <CameraView ref={cameraRef} style={StyleSheet.absoluteFill} facing="back" />
+      {/* Caméra en fond (mock mode uniquement) */}
+      {!SDK_AVAILABLE && (
+        <CameraView ref={cameraRef} style={StyleSheet.absoluteFill} facing="back" />
+      )}
 
-      {/* Flash */}
-      {flash && <View style={styles.flashOverlay} />}
+      {/* Flash (mock mode) */}
+      {!SDK_AVAILABLE && flash && <View style={styles.flashOverlay} />}
 
       {/* Overlay certification */}
       {isSubmitting && (
@@ -215,7 +247,7 @@ export default function CameraScreen() {
             <Text style={styles.closeBtnText}>✕</Text>
           </TouchableOpacity>
           <View style={styles.progressBar}>
-            {photos.map((_, i) => (
+            {photoLabels.map((_, i) => (
               <View
                 key={i}
                 style={[
@@ -250,7 +282,7 @@ export default function CameraScreen() {
         {/* Instruction photo */}
         <View style={styles.instructionBox}>
           <Text style={styles.instructionNum}>{currentIndex + 1}/{total}</Text>
-          <Text style={styles.instructionText} numberOfLines={2}>{photos[currentIndex]}</Text>
+          <Text style={styles.instructionText} numberOfLines={2}>{photoLabels[currentIndex]}</Text>
           {capturedPhotos[currentIndex] && (
             <View style={styles.capturedBadge}>
               <Text style={styles.capturedBadgeText}>✓ OK</Text>
@@ -294,7 +326,7 @@ export default function CameraScreen() {
           <TouchableOpacity
             style={[styles.navBtn, currentIndex >= total - 1 && styles.navBtnDisabled]}
             onPress={() => setCurrentIndex((i) => Math.min(total - 1, i + 1))}
-            disabled={currentIndex >= total - 1}
+            disabled={currentIndex >= total - 1 || isCapturing}
           >
             <Text style={styles.navBtnText}>›</Text>
           </TouchableOpacity>
@@ -304,7 +336,7 @@ export default function CameraScreen() {
         {doneCount > 0 && doneCount < total && (
           <TouchableOpacity
             style={styles.finishEarlyBtn}
-            onPress={() => finishAndSubmit(capturedPhotos)}
+            onPress={() => finishSession(capturedPhotos)}
             disabled={isSubmitting}
           >
             <Text style={styles.finishEarlyText}>Terminer ({doneCount}/{total} photos)</Text>

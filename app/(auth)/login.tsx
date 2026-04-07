@@ -6,6 +6,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import {
   ActivityIndicator,
+  Image,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -336,7 +337,7 @@ export default function LoginScreen() {
           {/* Logo */}
           <View style={styles.logoWrapper}>
             <View style={styles.logoIconBox}>
-              <Text style={styles.logoIconEmoji}>📷</Text>
+              <Image source={require('@/assets/images/splash-icon.png')} style={styles.logoImage} />
             </View>
             <Text style={styles.logoText}>
               Jeety <Text style={styles.logoPink}>Focus</Text>
@@ -412,7 +413,7 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     ...Shadows.lg,
   },
-  logoIconEmoji: { fontSize: 24 },
+  logoImage: { width: 40, height: 40, borderRadius: 8 },
   logoText: { color: Colors.white, fontSize: FontSize['4xl'], fontWeight: FontWeight.extrabold },
   logoPink: { color: Colors.pink },
   logoSub: { color: 'rgba(255,255,255,0.7)', fontSize: FontSize.md, marginTop: 4 },

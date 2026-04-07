@@ -6,7 +6,7 @@ import { Colors, FontSize, FontWeight, Radius, Shadows } from '@/constants/theme
 import { useAuth } from '@/context/AuthContext';
 import { useRole } from '@/hooks/use-role';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
     Linking,
     ScrollView,
@@ -19,13 +19,13 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function DetailScreen() {
   const router = useRouter();
-  const { dossiers: apiDossiers } = useAuth();
+  const auth = useAuth();
   const { role } = useRole();
   const params = useLocalSearchParams<{ id: string }>();
 
   // Use API dossiers if available, fallback to mock
-  const allDossiers = apiDossiers.length > 0
-    ? apiDossiers
+  const allDossiers = auth.dossiers.length > 0
+    ? auth.dossiers
     : role === 'artisan'
     ? DOSSIERS_ARTISAN
     : role === 'soustraitant'
@@ -34,20 +34,40 @@ export default function DetailScreen() {
 
   const dossier: Dossier | undefined = allDossiers.find((d) => d.id === params.id) ?? allDossiers[0];
 
-  // Track checked photos per phase
+  // Track checked photos per phase — persisted via API + AsyncStorage
   const [avantChecked, setAvantChecked] = useState<string[]>([]);
   const [apresChecked, setApresChecked] = useState<string[]>([]);
 
-  const handleToggleAvant = (label: string) => {
-    setAvantChecked((prev) =>
-      prev.includes(label) ? prev.filter((l) => l !== label) : [...prev, label]
-    );
-  };
-  const handleToggleApres = (label: string) => {
-    setApresChecked((prev) =>
-      prev.includes(label) ? prev.filter((l) => l !== label) : [...prev, label]
-    );
-  };
+  // Load persisted checklist on mount
+  useEffect(() => {
+    if (!dossier) return;
+    (async () => {
+      try {
+        const avant = await auth.loadChecklist(dossier.id, 'avant');
+        if (avant.length > 0) setAvantChecked(avant);
+        const apres = await auth.loadChecklist(dossier.id, 'apres');
+        if (apres.length > 0) setApresChecked(apres);
+      } catch {
+        // Fallback: start empty
+      }
+    })();
+  }, [dossier?.id]);
+
+  const handleToggleAvant = useCallback((label: string) => {
+    setAvantChecked((prev) => {
+      const next = prev.includes(label) ? prev.filter((l) => l !== label) : [...prev, label];
+      if (dossier) auth.saveChecklist(dossier.id, 'avant', next).catch(() => {});
+      return next;
+    });
+  }, [dossier?.id]);
+
+  const handleToggleApres = useCallback((label: string) => {
+    setApresChecked((prev) => {
+      const next = prev.includes(label) ? prev.filter((l) => l !== label) : [...prev, label];
+      if (dossier) auth.saveChecklist(dossier.id, 'apres', next).catch(() => {});
+      return next;
+    });
+  }, [dossier?.id]);
 
   if (!dossier) {
     return (
