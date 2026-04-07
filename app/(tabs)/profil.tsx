@@ -5,16 +5,19 @@ import type { Lang } from '@/constants/i18n';
 import { LANG_LABELS } from '@/constants/i18n';
 import { OUVRIERS, SOUS_TRAITANTS } from '@/constants/mock-data';
 import { Colors, FontSize, FontWeight, Radius, Shadows } from '@/constants/theme';
+import { useAuth } from '@/context/AuthContext';
 import { useRole } from '@/hooks/use-role';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import {
-    Alert,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  Alert,
+  Modal,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -97,7 +100,59 @@ function LanguagePicker({
 export default function ProfilScreen() {
   const router = useRouter();
   const { role, user, logout } = useRole();
-  const [lang, setLang] = useState<Lang>('fr');
+  const auth = useAuth();
+  const [lang, setLang] = useState<Lang>((user?.lang as Lang) || 'fr');
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [oldPassword, setOldPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [passwordLoading, setPasswordLoading] = useState(false);
+
+  // Use API team data, fallback to mock
+  const ouvriers = auth.teamOuvriers.length > 0
+    ? auth.teamOuvriers.map((o) => ({
+        id: String(o.id_ouvrier),
+        firstName: o.prenom,
+        lastName: o.nom,
+        initials: ((o.prenom?.[0] || '') + (o.nom?.[0] || '')).toUpperCase(),
+        phone: o.telephone,
+        status: o.status as 'active' | 'pending',
+        hasJeety: !!o.has_jeety,
+        rapportCount: undefined,
+      }))
+    : OUVRIERS;
+
+  const sousTraitants = auth.teamSousTraitants.length > 0
+    ? auth.teamSousTraitants.map((st) => ({
+        id: String(st.id_sous_traitant),
+        name: st.company_name,
+        siret: st.siret,
+        hasJeety: !!st.has_jeety,
+        rapportCount: st.rapport_count,
+      }))
+    : SOUS_TRAITANTS;
+
+  const handleChangePassword = async () => {
+    if (!oldPassword || !newPassword) {
+      Alert.alert('Erreur', 'Veuillez remplir les deux champs');
+      return;
+    }
+    setPasswordLoading(true);
+    const error = await auth.changePassword(oldPassword, newPassword);
+    setPasswordLoading(false);
+    if (error) {
+      Alert.alert('Erreur', error);
+    } else {
+      Alert.alert('Succès', 'Mot de passe modifié');
+      setShowPasswordModal(false);
+      setOldPassword('');
+      setNewPassword('');
+    }
+  };
+
+  const handleChangeLang = async (l: Lang) => {
+    setLang(l);
+    await auth.updateProfile({ lang: l });
+  };
 
   const handleLogout = () => {
     Alert.alert('Déconnexion', 'Voulez-vous vous déconnecter ?', [
@@ -134,8 +189,8 @@ export default function ProfilScreen() {
             <SectionHeader title="Mon équipe" />
 
             {/* Ouvriers */}
-            <SectionHeader title="Ouvriers" badge={OUVRIERS.length} badgeColor={Colors.pink} />
-            {OUVRIERS.map((m) => (
+            <SectionHeader title="Ouvriers" badge={ouvriers.length} badgeColor={Colors.pink} />
+            {ouvriers.map((m) => (
               <MembreCard
                 key={m.id}
                 membre={m}
@@ -149,12 +204,12 @@ export default function ProfilScreen() {
 
             {/* Sous-traitants */}
             <View style={{ marginTop: 16 }}>
-              <SectionHeader title="Sous-traitants" badge={SOUS_TRAITANTS.length} badgeColor={Colors.green} />
+              <SectionHeader title="Sous-traitants" badge={sousTraitants.length} badgeColor={Colors.green} />
               <InfoBox
                 icon="ℹ️"
                 text="Les sous-traitants sont liés automatiquement via leur SIRET enregistré dans votre CRM Jeety."
               />
-              {SOUS_TRAITANTS.map((st) => (
+              {sousTraitants.map((st) => (
                 <View key={st.id} style={styles.stCard}>
                   <View style={styles.stLeft}>
                     <Avatar initials={st.name.slice(0, 2).toUpperCase()} size={40} backgroundColor={Colors.green} borderRadius={Radius.md} />
@@ -189,14 +244,46 @@ export default function ProfilScreen() {
             <SectionHeader title="Paramètres" />
             <View style={styles.settingsCard}>
               <SettingsRow icon="📧" label="Email" value={user?.email} />
+              {user?.phone ? <SettingsRow icon="📱" label="Téléphone" value={user.phone} /> : null}
               <SettingsRow icon="🔔" label="Notifications" value="Activées" />
               <SettingsRow icon="📖" label="Guide d'utilisation" onPress={() => router.push('/guide')} />
-              <SettingsRow icon="🔒" label="Changer le mot de passe" />
+              <SettingsRow icon="🔒" label="Changer le mot de passe" onPress={() => setShowPasswordModal(true)} />
               <SettingsRow icon="🚪" label="Se déconnecter" onPress={handleLogout} danger />
             </View>
           </View>
 
           <Text style={styles.version}>Jeety Focus v1.0.0</Text>
+
+          {/* Password Modal */}
+          <Modal visible={showPasswordModal} transparent animationType="slide">
+            <View style={styles.modalOverlay}>
+              <View style={styles.modalContent}>
+                <Text style={styles.modalTitle}>Changer le mot de passe</Text>
+                <TextInput
+                  style={styles.modalInput}
+                  placeholder="Ancien mot de passe"
+                  secureTextEntry
+                  value={oldPassword}
+                  onChangeText={setOldPassword}
+                />
+                <TextInput
+                  style={styles.modalInput}
+                  placeholder="Nouveau mot de passe"
+                  secureTextEntry
+                  value={newPassword}
+                  onChangeText={setNewPassword}
+                />
+                <View style={styles.modalButtons}>
+                  <TouchableOpacity style={styles.modalBtnCancel} onPress={() => { setShowPasswordModal(false); setOldPassword(''); setNewPassword(''); }}>
+                    <Text style={styles.modalBtnCancelText}>Annuler</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.modalBtnConfirm} onPress={handleChangePassword} disabled={passwordLoading}>
+                    <Text style={styles.modalBtnConfirmText}>{passwordLoading ? '...' : 'Confirmer'}</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+          </Modal>
         </ScrollView>
       </SafeAreaView>
     );
@@ -223,11 +310,8 @@ export default function ProfilScreen() {
             <SectionHeader title="Mon équipe" />
 
             {/* Ouvriers */}
-            <SectionHeader title="Ouvriers" badge={2} badgeColor={Colors.pink} />
-            {[
-              { id: '1', firstName: 'Marc', lastName: 'LEBLANC', initials: 'ML', phone: '06 12 34 56 78', status: 'active' as const, hasJeety: true },
-              { id: '2', firstName: 'Thomas', lastName: 'DUBOIS', initials: 'TD', phone: '07 23 45 67 89', status: 'active' as const, hasJeety: true },
-            ].map((m) => (
+            <SectionHeader title="Ouvriers" badge={ouvriers.length} badgeColor={Colors.pink} />
+            {ouvriers.map((m) => (
               <MembreCard key={m.id} membre={m} />
             ))}
             <AddMembreCard
@@ -262,9 +346,10 @@ export default function ProfilScreen() {
             <SectionHeader title="Paramètres" />
             <View style={styles.settingsCard}>
               <SettingsRow icon="📧" label="Email" value={user?.email} />
+              {user?.phone ? <SettingsRow icon="📱" label="Téléphone" value={user.phone} /> : null}
               <SettingsRow icon="🔔" label="Notifications" value="Activées" />
               <SettingsRow icon="📖" label="Guide d'utilisation" onPress={() => router.push('/guide')} />
-              <SettingsRow icon="🔒" label="Changer le mot de passe" />
+              <SettingsRow icon="🔒" label="Changer le mot de passe" onPress={() => setShowPasswordModal(true)} />
               <SettingsRow icon="🚪" label="Se déconnecter" onPress={handleLogout} danger />
             </View>
           </View>
@@ -309,7 +394,7 @@ export default function ProfilScreen() {
         {/* Langue */}
         <View style={styles.section}>
           <SectionHeader title="Langue / Language" />
-          <LanguagePicker current={lang} onChange={setLang} />
+          <LanguagePicker current={lang} onChange={handleChangeLang} />
         </View>
 
         {/* Paramètres */}
@@ -317,9 +402,10 @@ export default function ProfilScreen() {
           <SectionHeader title="Paramètres" />
           <View style={styles.settingsCard}>
             <SettingsRow icon="📧" label="Email" value={user?.email} />
+            {user?.phone ? <SettingsRow icon="📱" label="Téléphone" value={user.phone} /> : null}
             <SettingsRow icon="🔔" label="Notifications" value="Activées" />
             <SettingsRow icon="📖" label="Guide d'utilisation" onPress={() => router.push('/guide')} />
-            <SettingsRow icon="🔒" label="Changer le mot de passe" />
+            <SettingsRow icon="🔒" label="Changer le mot de passe" onPress={() => setShowPasswordModal(true)} />
             <SettingsRow icon="🚪" label="Se déconnecter" onPress={handleLogout} danger />
           </View>
         </View>
@@ -541,5 +627,67 @@ const styles = StyleSheet.create({
     color: Colors.gray400,
     marginTop: 8,
     marginBottom: 16,
+  },
+
+  // Modal
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  modalContent: {
+    backgroundColor: Colors.white,
+    borderRadius: Radius.xl,
+    padding: 20,
+    width: '100%',
+    maxWidth: 400,
+  },
+  modalTitle: {
+    fontSize: FontSize['2xl'],
+    fontWeight: FontWeight.bold,
+    color: Colors.gray800,
+    marginBottom: 16,
+  },
+  modalInput: {
+    borderWidth: 1,
+    borderColor: Colors.gray200,
+    borderRadius: Radius.md,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: FontSize.xl,
+    marginBottom: 12,
+    color: Colors.gray800,
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 4,
+  },
+  modalBtnCancel: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    borderColor: Colors.gray200,
+    alignItems: 'center',
+  },
+  modalBtnCancelText: {
+    fontSize: FontSize.xl,
+    color: Colors.gray600,
+    fontWeight: FontWeight.medium,
+  },
+  modalBtnConfirm: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: Radius.md,
+    backgroundColor: Colors.blue,
+    alignItems: 'center',
+  },
+  modalBtnConfirmText: {
+    fontSize: FontSize.xl,
+    color: Colors.white,
+    fontWeight: FontWeight.semibold,
   },
 });

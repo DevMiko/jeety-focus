@@ -1,4 +1,4 @@
-import type { Dossier, DossierType, Role, UserProfile } from '@/constants/mock-data';
+import type { ApiOuvrier, ApiRapport, ApiSousTraitant, Dossier, DossierType, Role, UserProfile } from '@/constants/mock-data';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import NetInfo from '@react-native-community/netinfo';
 import axios from 'axios';
@@ -52,6 +52,20 @@ interface AuthContextType {
   loginError: string | null;
   refreshDossiers: () => Promise<void>;
 
+  // ─── Team ───────────────────────────────────────────────────────────────────
+  teamOuvriers: ApiOuvrier[];
+  teamSousTraitants: ApiSousTraitant[];
+  refreshTeam: () => Promise<void>;
+
+  // ─── Rapports ───────────────────────────────────────────────────────────────
+  rapports: ApiRapport[];
+  refreshRapports: () => Promise<void>;
+  createRapport: (data: Record<string, any>) => Promise<number | null>;
+
+  // ─── Profile ────────────────────────────────────────────────────────────────
+  updateProfile: (fields: Record<string, string>) => Promise<boolean>;
+  changePassword: (oldPsw: string, newPsw: string) => Promise<string | null>;
+
   // ─── Storage helpers ────────────────────────────────────────────────────────
   asyncSave: (key: string, value: string) => Promise<void>;
   secureSave: (key: string, value: string) => Promise<void>;
@@ -75,6 +89,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [location, setLocation] = useState<LocationCoords | null>(null);
   const [dossiers, setDossiers] = useState<Dossier[]>([]);
   const [loginError, setLoginError] = useState<string | null>(null);
+  const [teamOuvriers, setTeamOuvriers] = useState<ApiOuvrier[]>([]);
+  const [teamSousTraitants, setTeamSousTraitants] = useState<ApiSousTraitant[]>([]);
+  const [rapports, setRapports] = useState<ApiRapport[]>([]);
 
   // ─── Storage helpers ────────────────────────────────────────────────────────
 
@@ -185,7 +202,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       company: data.company?.company_name || '',
       siret: data.company?.siret || '',
       email: data.email || '',
+      phone: data.tel_user || '',
       role: role || 'artisan',
+      location: data.location || '',
+      lang: data.lang || 'fr',
+      status: data.status_user || 'pending',
+      dateLastLogin: data.date_last_login || '',
+      idProfil: data.id_profil ? Number(data.id_profil) : undefined,
+      idCompany: data.id_company ? Number(data.id_company) : undefined,
     };
   };
 
@@ -215,6 +239,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const apiDossiers = (res.data.data?.dossiers || []).map(mapApiDossier);
         setDossiers(apiDossiers);
         await asyncSave('dossiers', JSON.stringify(apiDossiers));
+        // Team data
+        const team = res.data.data?.team || {};
+        setTeamOuvriers(team.ouvriers || []);
+        setTeamSousTraitants(team.sous_traitants || []);
+        await asyncSave('teamOuvriers', JSON.stringify(team.ouvriers || []));
+        await asyncSave('teamSousTraitants', JSON.stringify(team.sous_traitants || []));
         return true;
       } else {
         setLoginError(res.data.message || 'Identifiants incorrects');
@@ -243,6 +273,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const apiDossiers = (res.data.data?.dossiers || []).map(mapApiDossier);
       setDossiers(apiDossiers);
       await asyncSave('dossiers', JSON.stringify(apiDossiers));
+      // Team data
+      const team = res.data.data?.team || {};
+      setTeamOuvriers(team.ouvriers || []);
+      setTeamSousTraitants(team.sous_traitants || []);
+      await asyncSave('teamOuvriers', JSON.stringify(team.ouvriers || []));
+      await asyncSave('teamSousTraitants', JSON.stringify(team.sous_traitants || []));
     });
   };
 
@@ -260,6 +296,91 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
   };
 
+  // ─── Refresh team ───────────────────────────────────────────────────────────
+
+  const refreshTeam = async () => {
+    if (!usertoken) return;
+    apiAction({
+      action: 'get-team',
+      token: usertoken,
+    }, async (res) => {
+      const team = res.data.team || {};
+      setTeamOuvriers(team.ouvriers || []);
+      setTeamSousTraitants(team.sous_traitants || []);
+      await asyncSave('teamOuvriers', JSON.stringify(team.ouvriers || []));
+      await asyncSave('teamSousTraitants', JSON.stringify(team.sous_traitants || []));
+    });
+  };
+
+  // ─── Refresh rapports ───────────────────────────────────────────────────────
+
+  const refreshRapports = async () => {
+    if (!usertoken) return;
+    apiAction({
+      action: 'get-rapports',
+      token: usertoken,
+    }, async (res) => {
+      setRapports(res.data.rapports || []);
+      await asyncSave('rapports_list', JSON.stringify(res.data.rapports || []));
+    });
+  };
+
+  // ─── Create rapport ─────────────────────────────────────────────────────────
+
+  const createRapport = async (data: Record<string, any>): Promise<number | null> => {
+    if (!usertoken) return null;
+    return new Promise((resolve) => {
+      apiAction({
+        action: 'create-rapport',
+        token: usertoken,
+        ...data,
+      }, (res) => {
+        refreshRapports();
+        resolve(res.data.id_rapport ?? null);
+      }, () => {
+        resolve(null);
+      });
+    });
+  };
+
+  // ─── Update profile ─────────────────────────────────────────────────────────
+
+  const updateProfile = async (fields: Record<string, string>): Promise<boolean> => {
+    if (!usertoken) return false;
+    return new Promise((resolve) => {
+      apiAction({
+        action: 'update-profile',
+        token: usertoken,
+        ...fields,
+      }, async (res) => {
+        const profile = mapApiUserProfile(res.data.data);
+        setUserData(profile);
+        await asyncSave('userdata', JSON.stringify(profile));
+        resolve(true);
+      }, () => {
+        resolve(false);
+      });
+    });
+  };
+
+  // ─── Change password ────────────────────────────────────────────────────────
+
+  const changePassword = async (oldPsw: string, newPsw: string): Promise<string | null> => {
+    if (!usertoken) return 'Non connecté';
+    return new Promise((resolve) => {
+      apiAction({
+        action: 'change-password',
+        token: usertoken,
+        old_password: oldPsw,
+        new_password: newPsw,
+      }, () => {
+        resolve(null);
+      }, (msg) => {
+        resolve(msg);
+      });
+    });
+  };
+
   // ─── Logout ─────────────────────────────────────────────────────────────────
 
   const doLogout = async () => {
@@ -267,12 +388,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUserData(null);
     setRoleState(null);
     setDossiers([]);
+    setTeamOuvriers([]);
+    setTeamSousTraitants([]);
+    setRapports([]);
     setLoginError(null);
     setIsLoading(false);
     await SecureStore.deleteItemAsync('usertoken');
     await AsyncStorage.removeItem('userdata');
     await AsyncStorage.removeItem('role');
     await AsyncStorage.removeItem('dossiers');
+    await AsyncStorage.removeItem('teamOuvriers');
+    await AsyncStorage.removeItem('teamSousTraitants');
+    await AsyncStorage.removeItem('rapports_list');
   };
 
   // ─── Set Role ───────────────────────────────────────────────────────────────
@@ -354,6 +481,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     try {
+      const savedOuvriers = await getAsyncData('teamOuvriers');
+      if (savedOuvriers) setTeamOuvriers(JSON.parse(savedOuvriers));
+      const savedST = await getAsyncData('teamSousTraitants');
+      if (savedST) setTeamSousTraitants(JSON.parse(savedST));
+      const savedRapports = await getAsyncData('rapports_list');
+      if (savedRapports) setRapports(JSON.parse(savedRapports));
+    } catch (e) {
+      console.log(`Restore team/rapports error: ${e}`);
+    }
+
+    try {
       const token = await SecureStore.getItemAsync('usertoken');
       setUserToken(token);
       if (token) {
@@ -407,6 +545,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setRole,
         apiAction,
         refreshDossiers,
+        teamOuvriers,
+        teamSousTraitants,
+        refreshTeam,
+        rapports,
+        refreshRapports,
+        createRapport,
+        updateProfile,
+        changePassword,
         asyncSave,
         secureSave,
       }}

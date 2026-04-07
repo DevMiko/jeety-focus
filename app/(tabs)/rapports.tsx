@@ -2,18 +2,19 @@ import { Avatar } from '@/components/ui/avatar';
 import { TypeBadge } from '@/components/ui/badge';
 import { Fab } from '@/components/ui/fab';
 import { SearchBar } from '@/components/ui/search-bar';
-import type { RapportLibre } from '@/constants/mock-data';
+import type { DossierType, RapportLibre } from '@/constants/mock-data';
 import { RAPPORTS_LIBRES } from '@/constants/mock-data';
 import { Colors, FontSize, FontWeight, Radius, Shadows } from '@/constants/theme';
+import { useAuth } from '@/context/AuthContext';
 import { useRole } from '@/hooks/use-role';
 import { useRouter } from 'expo-router';
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -63,11 +64,40 @@ function RapportCard({
 export default function RapportsScreen() {
   const router = useRouter();
   const { role, user } = useRole();
+  const auth = useAuth();
   const [search, setSearch] = useState('');
   const [phaseFilter, setPhaseFilter] = useState<'tous' | 'Avant' | 'Après'>('tous');
 
+  // Refresh rapports on mount
+  useEffect(() => {
+    auth.refreshRapports();
+  }, []);
+
+  // Map API rapports to RapportLibre format, fallback to mock
+  const rapportsList: RapportLibre[] = useMemo(() => {
+    if (auth.rapports.length > 0) {
+      return auth.rapports.map((r) => {
+        const dateStr = r.date_creation
+          ? new Date(r.date_creation).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: '2-digit' })
+          : '';
+        return {
+          id: String(r.id_rapport),
+          ref: r.reference_rapport,
+          clientName: r.client_name || 'Sans nom',
+          address: r.client_address || '',
+          types: (r.types || []) as DossierType[],
+          phase: r.phase,
+          date: dateStr,
+          via: r.via || undefined,
+          assignedTo: undefined,
+        };
+      });
+    }
+    return RAPPORTS_LIBRES;
+  }, [auth.rapports]);
+
   const filtered = useMemo(() => {
-    let list = RAPPORTS_LIBRES;
+    let list = rapportsList;
     if (search.trim()) {
       const q = search.toLowerCase();
       list = list.filter(
@@ -81,7 +111,7 @@ export default function RapportsScreen() {
       list = list.filter((r) => r.phase === phaseFilter);
     }
     return list;
-  }, [search, phaseFilter]);
+  }, [search, phaseFilter, rapportsList]);
 
   const handlePress = (rapport: RapportLibre) => {
     router.push({ pathname: '/detail', params: { id: rapport.id, type: 'rapport' } });

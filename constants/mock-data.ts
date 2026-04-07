@@ -58,8 +58,53 @@ export interface UserProfile {
   company: string;
   siret?: string;
   email: string;
+  phone?: string;
   role: Role;
   employeur?: string;
+  location?: string;
+  lang?: string;
+  status?: string;
+  dateLastLogin?: string;
+  idProfil?: number;
+  idCompany?: number;
+}
+
+// ─── Team types ──────────────────────────────────────────────────────────────
+
+export interface ApiOuvrier {
+  id_ouvrier: number;
+  id_user: number | null;
+  nom: string;
+  prenom: string;
+  telephone: string;
+  status: 'active' | 'pending';
+  has_jeety: number;
+  email: string;
+}
+
+export interface ApiSousTraitant {
+  id_sous_traitant: number;
+  id_user: number | null;
+  company_name: string;
+  siret: string;
+  etat_administratif: string;
+  has_jeety: number;
+  rapport_count: number;
+}
+
+export interface ApiRapport {
+  id_rapport: number;
+  id_dossier: number | null;
+  reference_rapport: string;
+  client_name: string;
+  client_address: string;
+  types: string[];
+  phase: 'Avant' | 'Après';
+  statut: 'brouillon' | 'soumis' | 'valide';
+  notes: string;
+  assigned_to: number | null;
+  via: string | null;
+  date_creation: string;
 }
 
 // ─── Users ───────────────────────────────────────────────────────────────────
