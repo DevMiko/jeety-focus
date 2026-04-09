@@ -5,8 +5,6 @@ import { SearchBar } from '@/components/ui/search-bar';
 import type { DossierType, RapportLibre } from '@/constants/mock-data';
 import { RAPPORTS_LIBRES } from '@/constants/mock-data';
 import { Colors, FontSize, FontWeight, Radius, Shadows } from '@/constants/theme';
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const jeetyLogo = require('@/assets/images/splash-icon.png');
 import { useAuth } from '@/context/AuthContext';
 import { useRole } from '@/hooks/use-role';
 import { useRouter } from 'expo-router';
@@ -20,6 +18,8 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const jeetyLogo = require('@/assets/images/splash-icon.png');
 
 function RapportCard({
   rapport,

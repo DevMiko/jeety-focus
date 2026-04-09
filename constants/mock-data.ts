@@ -17,7 +17,7 @@ export interface Dossier {
   avantRef?: string;
   avantDate?: string;
   assignedTo?: string;
-  donneurOrdre?: string;
+  companyOrdre?: string;
 }
 
 export interface RapportLibre {
@@ -212,7 +212,7 @@ export const DOSSIERS_SOUSTRAITANT: Dossier[] = [
     types: ['PAC', 'BALLON'],
     avantStatus: 'pending',
     apresStatus: 'locked',
-    donneurOrdre: 'Dupont Énergies',
+    companyOrdre: 'Dupont Énergies',
     assignedTo: 'Marc L.',
   },
   {
@@ -226,7 +226,7 @@ export const DOSSIERS_SOUSTRAITANT: Dossier[] = [
     apresStatus: 'pending',
     avantRef: 'RF-1248',
     avantDate: '27/12/24',
-    donneurOrdre: 'Dupont Énergies',
+    companyOrdre: 'Dupont Énergies',
     assignedTo: 'Thomas D.',
   },
 ];
@@ -243,7 +243,7 @@ export const DOSSIERS_OUVRIER: Dossier[] = [
     types: ['PAC', 'BALLON'],
     avantStatus: 'pending',
     apresStatus: 'locked',
-    donneurOrdre: 'Dupont Énergies',
+    companyOrdre: 'Dupont Énergies',
   },
   {
     id: '2',
@@ -254,7 +254,7 @@ export const DOSSIERS_OUVRIER: Dossier[] = [
     types: ['ISOLATION'],
     avantStatus: 'pending',
     apresStatus: 'locked',
-    donneurOrdre: 'Isol Therm SARL',
+    companyOrdre: 'Isol Therm SARL',
   },
 ];
 

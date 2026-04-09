@@ -1,8 +1,8 @@
 import { AddMembreCard, MembreCard } from '@/components/membre-card';
 import { Avatar } from '@/components/ui/avatar';
 import { InfoBox } from '@/components/ui/info-box';
-import { OUVRIERS, OUVRIERS_ST, SOUS_TRAITANTS } from '@/constants/mock-data';
 import type { SousTraitant, TeamMember } from '@/constants/mock-data';
+import { OUVRIERS, OUVRIERS_ST, SOUS_TRAITANTS } from '@/constants/mock-data';
 import { Colors, FontSize, FontWeight, Radius, Shadows } from '@/constants/theme';
 import { useAuth } from '@/context/AuthContext';
 import { useRole } from '@/hooks/use-role';

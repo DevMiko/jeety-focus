@@ -33,8 +33,8 @@ export function DossierCard({ dossier, role, onPress, isSelected }: DossierCardP
           <TouchableOpacity onPress={handlePhonePress}>
             <Text style={styles.phone}>📞 {dossier.phone}</Text>
           </TouchableOpacity>
-          {dossier.donneurOrdre && (role === 'soustraitant' || role === 'ouvrier') && (
-            <Text style={styles.donneurLabel}>via {dossier.donneurOrdre}</Text>
+          {dossier.companyOrdre && (role === 'soustraitant' || role === 'ouvrier') && (
+            <Text style={styles.companyLabel}>via {dossier.companyOrdre}</Text>
           )}
         </View>
         <View style={styles.badges}>
@@ -113,7 +113,7 @@ const styles = StyleSheet.create({
     color: Colors.blue,
     marginTop: 2,
   },
-  donneurLabel: {
+  companyLabel: {
     fontSize: FontSize.sm,
     color: Colors.gray400,
     marginTop: 2,

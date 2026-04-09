@@ -16,8 +16,6 @@ import {
     DOSSIERS_SOUSTRAITANT,
 } from '@/constants/mock-data';
 import { Colors, FontSize, FontWeight, Radius } from '@/constants/theme';
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const jeetyLogo = require('@/assets/images/splash-icon.png');
 import { useAuth } from '@/context/AuthContext';
 import { useRole } from '@/hooks/use-role';
 import { useRouter } from 'expo-router';
@@ -31,6 +29,8 @@ import {
     View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const jeetyLogo = require('@/assets/images/splash-icon.png');
 
 const STAGE_OPTIONS: FilterOption[] = [
   { value: 'tous', label: 'Tous' },

@@ -29,7 +29,7 @@ const FALLBACK_ADDRESSES = [
   '2 rue de la Liberté, 13000 Marseille',
 ];
 
-const FALLBACK_DONNEURS = ['Dupont Énergies', 'Isol Therm SARL', 'Clim Plus SARL'];
+const FALLBACK_COMPANIES = ['Dupont Énergies', 'Isol Therm SARL', 'Clim Plus SARL'];
 
 // ─── Step Number Badge ─────────────────────────────────────────────────────
 function StepNum({ n }: { n: number }) {
@@ -108,22 +108,22 @@ export default function CreateScreen() {
   // Section 1 state
   const [address, setAddress] = useState('');
   const [showSuggestions, setShowSuggestions] = useState(false);
-  const [donneurOrdre, setDonneurOrdre] = useState('');
-  const [showDonneurPicker, setShowDonneurPicker] = useState(false);
+  const [companyOrdre, setCompanyOrdre] = useState('');
+  const [showCompanyPicker, setShowCompanyPicker] = useState(false);
 
   // Dynamic data with fallback
   const [addressSuggestions, setAddressSuggestions] = useState<string[]>([]);
   const [searchingAddresses, setSearchingAddresses] = useState(false);
-  const [donneurOptions, setDonneurOptions] = useState<string[]>(FALLBACK_DONNEURS);
+  const [companyOptions, setCompanyOptions] = useState<string[]>(FALLBACK_COMPANIES);
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Load donneurs d'ordre from API on mount
+  // Load companies (donneurs d'ordre) from API on mount
   useEffect(() => {
     (async () => {
       try {
-        const donneurs = await auth.getDonneurs();
-        if (donneurs.length > 0) {
-          setDonneurOptions(donneurs.map((d) => d.name));
+        const companies = await auth.getCompanies();
+        if (companies.length > 0) {
+          setCompanyOptions(companies.map((d) => d.name));
         }
       } catch {
         // Fallback already set
@@ -272,23 +272,23 @@ export default function CreateScreen() {
               <View>
                 <TouchableOpacity
                   style={styles.selectBtn}
-                  onPress={() => setShowDonneurPicker((v) => !v)}
+                  onPress={() => setShowCompanyPicker((v) => !v)}
                   activeOpacity={0.8}
                 >
-                  <Text style={[styles.selectBtnText, !donneurOrdre && styles.selectBtnPlaceholder]}>
-                    {donneurOrdre || 'Sélectionner un donneur d\'ordre...'}
+                  <Text style={[styles.selectBtnText, !companyOrdre && styles.selectBtnPlaceholder]}>
+                    {companyOrdre || 'Sélectionner un donneur d\'ordre...'}
                   </Text>
                   <Text style={styles.selectChevron}>▾</Text>
                 </TouchableOpacity>
-                {showDonneurPicker && (
+                {showCompanyPicker && (
                   <View style={styles.dropdown}>
-                    {donneurOptions.map((d) => (
+                    {companyOptions.map((d) => (
                       <TouchableOpacity
                         key={d}
                         style={styles.dropdownItem}
                         onPress={() => {
-                          setDonneurOrdre(d);
-                          setShowDonneurPicker(false);
+                          setCompanyOrdre(d);
+                          setShowCompanyPicker(false);
                         }}
                       >
                         <Text style={styles.dropdownItemText}>🏢 {d}</Text>
@@ -490,7 +490,7 @@ const styles = StyleSheet.create({
     color: Colors.gray700,
   },
 
-  // Select button (donneur)
+  // Select button (company)
   selectBtn: {
     flexDirection: 'row',
     alignItems: 'center',

@@ -3,23 +3,23 @@ import { PHOTOS_APRES, PHOTOS_AVANT } from '@/constants/mock-data';
 import { Colors, FontSize, FontWeight, Radius, Shadows } from '@/constants/theme';
 import type { PhotoResult } from '@/services/certificall';
 import {
-  SDK_AVAILABLE,
-  buildMockPhotoResult,
-  buildReportSummary,
-  buildReportToken,
-  takeCertifiedPhoto,
+    SDK_AVAILABLE,
+    buildMockPhotoResult,
+    buildReportSummary,
+    buildReportToken,
+    takeCertifiedPhoto,
 } from '@/services/certificall';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as Location from 'expo-location';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
-  Platform,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
+    ActivityIndicator,
+    Platform,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 

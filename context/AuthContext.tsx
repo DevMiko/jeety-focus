@@ -73,7 +73,7 @@ interface AuthContextType {
 
   // ─── Dynamic data ───────────────────────────────────────────────────────────
   searchAddresses: (query: string) => Promise<string[]>;
-  getDonneurs: () => Promise<{ id: string; name: string }[]>;
+  getCompanies: () => Promise<{ id: string; name: string }[]>;
   saveChecklist: (dossierId: string, phase: string, checkedItems: string[]) => Promise<boolean>;
   loadChecklist: (dossierId: string, phase: string) => Promise<string[]>;
 
@@ -465,16 +465,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
   };
 
-  // ─── Get donneurs d'ordre ───────────────────────────────────────────────────
+  // ─── Get companies (donneurs d'ordre) ───────────────────────────────────────────────
 
-  const getDonneurs = async (): Promise<{ id: string; name: string }[]> => {
+  const getCompanies = async (): Promise<{ id: string; name: string }[]> => {
     if (!usertoken) return [];
     return new Promise((resolve) => {
       apiAction({
-        action: 'get-donneurs',
+        action: 'get-companies',
         token: usertoken,
       }, (res) => {
-        resolve(res.data.donneurs || []);
+        resolve(res.data.companies || []);
       }, () => {
         resolve([]);
       });
@@ -692,7 +692,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         removeOuvrier,
         inviteMember,
         searchAddresses,
-        getDonneurs,
+        getCompanies,
         saveChecklist,
         loadChecklist,
         asyncSave,
