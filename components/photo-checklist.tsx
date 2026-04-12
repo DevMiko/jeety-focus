@@ -1,4 +1,4 @@
-import type { DossierType } from '@/constants/mock-data';
+import type { DossierPhoto, DossierType, PhotoRequirement } from '@/constants/mock-data';
 import { PHOTOS_APRES, PHOTOS_AVANT } from '@/constants/mock-data';
 import { Colors, FontSize, FontWeight, Radius, Shadows } from '@/constants/theme';
 import React from 'react';
@@ -7,8 +7,13 @@ import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 interface PhotoChecklistProps {
   phase: 'avant' | 'apres';
   types: DossierType[];
-  checkedItems: string[];
-  onToggle: (label: string) => void;
+  /** API-driven requirements (if available, overrides hardcoded labels) */
+  requirements?: PhotoRequirement[];
+  /** Photos already taken for this dossier+phase */
+  photos?: DossierPhoto[];
+  /** Legacy: locally checked labels (fallback when no API requirements) */
+  checkedItems?: string[];
+  onToggle?: (label: string) => void;
   locked?: boolean;
   onStartCamera?: () => void;
 }
@@ -16,18 +21,40 @@ interface PhotoChecklistProps {
 export function PhotoChecklist({
   phase,
   types,
-  checkedItems,
+  requirements,
+  photos,
+  checkedItems = [],
   onToggle,
   locked = false,
   onStartCamera,
 }: PhotoChecklistProps) {
-  // Merge all photo labels for the given types
-  const photos = Array.from(
+  // Build checklist items — API requirements take priority, fallback to hardcoded
+  const useApi = requirements && requirements.length > 0;
+  const phaseRequirements = useApi
+    ? requirements.filter((r) => r.phase === phase)
+    : [];
+
+  // Fallback: hardcoded labels
+  const fallbackLabels = Array.from(
     new Set(types.flatMap((t) => (phase === 'avant' ? PHOTOS_AVANT[t] : PHOTOS_APRES[t])))
   );
 
-  const allDone = photos.every((p) => checkedItems.includes(p));
-  const doneCount = photos.filter((p) => checkedItems.includes(p)).length;
+  const items = useApi
+    ? phaseRequirements.map((r) => ({
+        key: String(r.id_photo_requirement),
+        label: r.label,
+        requirementId: r.id_photo_requirement,
+        isDone: (photos || []).some((p) => p.id_photo_requirement === r.id_photo_requirement),
+      }))
+    : fallbackLabels.map((label) => ({
+        key: label,
+        label,
+        requirementId: null as number | null,
+        isDone: checkedItems.includes(label),
+      }));
+
+  const allDone = items.length > 0 && items.every((i) => i.isDone);
+  const doneCount = items.filter((i) => i.isDone).length;
 
   const cardBorderColor = locked
     ? 'transparent'
@@ -38,8 +65,8 @@ export function PhotoChecklist({
   const statusLabel = locked
     ? 'Verrouillé'
     : allDone
-    ? `Terminé (${doneCount}/${photos.length})`
-    : `En cours (${doneCount}/${photos.length})`;
+    ? `Terminé (${doneCount}/${items.length})`
+    : `En cours (${doneCount}/${items.length})`;
 
   const statusStyle = locked
     ? styles.statusLocked
@@ -59,25 +86,22 @@ export function PhotoChecklist({
       </View>
 
       <View style={styles.list}>
-        {photos.map((photo) => {
-          const isDone = checkedItems.includes(photo);
-          return (
-            <TouchableOpacity
-              key={photo}
-              style={[styles.item, isDone && styles.itemDone]}
-              onPress={() => !locked && onToggle(photo)}
-              activeOpacity={locked ? 1 : 0.7}
-              disabled={locked}
-            >
-              <View style={[styles.itemIcon, isDone && styles.itemIconDone]}>
-                <Text style={styles.itemIconText}>{isDone ? '✓' : '📷'}</Text>
-              </View>
-              <Text style={[styles.itemText, isDone && styles.itemTextDone]} numberOfLines={2}>
-                {photo}
-              </Text>
-            </TouchableOpacity>
-          );
-        })}
+        {items.map((item) => (
+          <TouchableOpacity
+            key={item.key}
+            style={[styles.item, item.isDone && styles.itemDone]}
+            onPress={() => !locked && onToggle?.(item.label)}
+            activeOpacity={locked ? 1 : 0.7}
+            disabled={locked || useApi}
+          >
+            <View style={[styles.itemIcon, item.isDone && styles.itemIconDone]}>
+              <Text style={styles.itemIconText}>{item.isDone ? '✓' : '📷'}</Text>
+            </View>
+            <Text style={[styles.itemText, item.isDone && styles.itemTextDone]} numberOfLines={2}>
+              {item.label}
+            </Text>
+          </TouchableOpacity>
+        ))}
       </View>
 
       {!locked && onStartCamera && (

@@ -1,4 +1,5 @@
 import { Colors, FontSize, FontWeight } from '@/constants/theme';
+import { useAuth } from '@/context/AuthContext';
 import { useRole } from '@/hooks/use-role';
 import { Tabs } from 'expo-router';
 import React from 'react';
@@ -51,7 +52,11 @@ const tabStyles = StyleSheet.create({
 
 export default function TabLayout() {
   const { role } = useRole();
+  const { rapports } = useAuth();
   const insets = useSafeAreaInsets();
+
+  // Nombre de rapports libres (non rattachés à un dossier)
+  const rapportsLibresCount = rapports.filter((r) => !r.id_dossier).length;
 
   const tab1Label = role === 'ouvrier' ? 'Mes chantiers' : 'Dossiers Jeety';
   const tab3Label = role === 'ouvrier' ? 'Mon profil' : 'Profil & équipe';
@@ -87,7 +92,7 @@ export default function TabLayout() {
         name="rapports"
         options={{
           title: 'Rapports libres',
-          tabBarIcon: ({ focused }) => <TabIcon icon="📋" focused={focused} badge={6} />,
+          tabBarIcon: ({ focused }) => <TabIcon icon="📋" focused={focused} badge={rapportsLibresCount} />,
         }}
       />
       <Tabs.Screen

@@ -1,6 +1,6 @@
 import { PhotoChecklist } from '@/components/photo-checklist';
 import { TypeBadge } from '@/components/ui/badge';
-import type { Dossier, DossierType } from '@/constants/mock-data';
+import type { Dossier, DossierPhoto, DossierType, PhotoRequirement } from '@/constants/mock-data';
 import { DOSSIERS_ARTISAN, DOSSIERS_OUVRIER, DOSSIERS_SOUSTRAITANT } from '@/constants/mock-data';
 import { Colors, FontSize, FontWeight, Radius, Shadows } from '@/constants/theme';
 import { useAuth } from '@/context/AuthContext';
@@ -34,13 +34,36 @@ export default function DetailScreen() {
 
   const dossier: Dossier | undefined = allDossiers.find((d) => d.id === params.id) ?? allDossiers[0];
 
-  // Track checked photos per phase — persisted via API + AsyncStorage
+  // Calculer le statut avant/après depuis les rapports rattachés
+  const rattachedRapports = auth.rapports.filter((r) => dossier && String(r.id_dossier) === dossier.id);
+  const hasRapportAvant = rattachedRapports.some((r) => r.phase === 'Avant');
+  const hasRapportApres = rattachedRapports.some((r) => r.phase === 'Après');
+
+  // ─── Photo requirements + photos from API ────────────────────────────────
+  const [requirements, setRequirements] = useState<PhotoRequirement[]>([]);
+  const [dossierPhotos, setDossierPhotos] = useState<DossierPhoto[]>([]);
+
+  // Legacy: local checklist fallback (when no API requirements)
   const [avantChecked, setAvantChecked] = useState<string[]>([]);
   const [apresChecked, setApresChecked] = useState<string[]>([]);
 
-  // Load persisted checklist on mount
+  // Load requirements + photos on mount
   useEffect(() => {
     if (!dossier) return;
+
+    // Load API photo requirements from dossier's travaux
+    const idCeeFiches = (dossier.travaux || [])
+      .map((t) => t.id_cee_fiche)
+      .filter((id): id is number => id !== null);
+
+    if (idCeeFiches.length > 0) {
+      auth.getPhotoRequirements(idCeeFiches).then(setRequirements);
+    }
+
+    // Load existing photos for this dossier
+    auth.getDossierPhotos(dossier.id).then(setDossierPhotos);
+
+    // Also load legacy local checklists (fallback)
     (async () => {
       try {
         const avant = await auth.loadChecklist(dossier.id, 'avant');
@@ -69,6 +92,12 @@ export default function DetailScreen() {
     });
   }, [dossier?.id]);
 
+  // Refresh photos after camera returns
+  const refreshPhotos = useCallback(() => {
+    if (!dossier) return;
+    auth.getDossierPhotos(dossier.id).then(setDossierPhotos);
+  }, [dossier?.id]);
+
   if (!dossier) {
     return (
       <SafeAreaView style={styles.screen}>
@@ -80,8 +109,10 @@ export default function DetailScreen() {
     );
   }
 
-  const avantLocked = dossier.avantStatus === 'locked';
-  const apresLocked = dossier.apresStatus === 'locked';
+  // Avant: déverrouillé si un rapport "Avant" est rattaché, sinon pending
+  // Après: déverrouillé si un rapport "Après" est rattaché, sinon locked tant que avant pas fait
+  const avantLocked = false; // toujours accessible pour prendre des photos
+  const apresLocked = !hasRapportAvant && !hasRapportApres; // locked seulement si aucun rapport
 
   return (
     <SafeAreaView style={styles.screen}>
@@ -144,6 +175,21 @@ export default function DetailScreen() {
         contentContainerStyle={styles.contentPadding}
         showsVerticalScrollIndicator={false}
       >
+        {/* Rapports rattachés */}
+        {rattachedRapports.length > 0 && (
+          <View style={styles.rapportsSection}>
+            {rattachedRapports.map((r) => (
+              <View key={r.id_rapport} style={styles.rapportTag}>
+                <Text style={styles.rapportTagIcon}>{r.phase === 'Avant' ? '📋' : '📋'}</Text>
+                <Text style={styles.rapportTagText}>
+                  Rapport {r.phase} — {r.reference_rapport}
+                </Text>
+                <Text style={styles.rapportTagCheck}>✓</Text>
+              </View>
+            ))}
+          </View>
+        )}
+
         {/* Avant travaux */}
         <View style={styles.sectionTitle}>
           <Text style={styles.sectionLabel}>📷 Photos avant travaux</Text>
@@ -151,6 +197,8 @@ export default function DetailScreen() {
         <PhotoChecklist
           phase="avant"
           types={dossier.types}
+          requirements={requirements}
+          photos={dossierPhotos}
           checkedItems={avantChecked}
           onToggle={handleToggleAvant}
           locked={avantLocked}
@@ -161,6 +209,11 @@ export default function DetailScreen() {
                 dossierId: dossier.id,
                 phase: 'avant',
                 types: dossier.types.join(','),
+                requirementsJson: JSON.stringify(
+                  requirements
+                    .filter((r) => r.phase === 'avant')
+                    .map((r) => ({ id: r.id_photo_requirement, label: r.label }))
+                ),
               },
             })
           }
@@ -173,6 +226,8 @@ export default function DetailScreen() {
         <PhotoChecklist
           phase="apres"
           types={dossier.types}
+          requirements={requirements}
+          photos={dossierPhotos}
           checkedItems={apresChecked}
           onToggle={handleToggleApres}
           locked={apresLocked}
@@ -183,6 +238,11 @@ export default function DetailScreen() {
                 dossierId: dossier.id,
                 phase: 'apres',
                 types: dossier.types.join(','),
+                requirementsJson: JSON.stringify(
+                  requirements
+                    .filter((r) => r.phase === 'apres')
+                    .map((r) => ({ id: r.id_photo_requirement, label: r.label }))
+                ),
               },
             })
           }
@@ -311,5 +371,32 @@ const styles = StyleSheet.create({
     marginTop: 40,
     fontSize: FontSize.xl,
     color: Colors.gray500,
+  },
+  rapportsSection: {
+    marginBottom: 12,
+    gap: 6,
+  },
+  rapportTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#dcfce7',
+    borderRadius: Radius.md,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  rapportTagIcon: {
+    fontSize: 14,
+  },
+  rapportTagText: {
+    flex: 1,
+    fontSize: FontSize.base,
+    fontWeight: FontWeight.semibold,
+    color: '#15803d',
+  },
+  rapportTagCheck: {
+    fontSize: 14,
+    fontWeight: FontWeight.bold,
+    color: '#15803d',
   },
 });

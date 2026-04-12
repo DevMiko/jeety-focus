@@ -5,6 +5,13 @@ export type DossierType = 'PAC' | 'BALLON' | 'ISOLATION' | 'CHAUDIERE';
 export type PhotoStatus = 'done' | 'pending' | 'locked';
 export type MemberStatus = 'active' | 'pending';
 
+export interface DossierTravaux {
+  id_travaux: number;
+  type_travaux: DossierType;
+  id_cee_fiche: number | null;
+  code_operation?: string;
+}
+
 export interface Dossier {
   id: string;
   ref: string;
@@ -12,12 +19,14 @@ export interface Dossier {
   address: string;
   phone: string;
   types: DossierType[];
+  travaux: DossierTravaux[];
   avantStatus: PhotoStatus;
   apresStatus: PhotoStatus;
   avantRef?: string;
   avantDate?: string;
   assignedTo?: string;
   companyOrdre?: string;
+  donneurOrdre?: string;
 }
 
 export interface RapportLibre {
@@ -107,6 +116,31 @@ export interface ApiRapport {
   date_creation: string;
 }
 
+export interface PhotoRequirement {
+  id_photo_requirement: number;
+  id_cee_fiche: number;
+  phase: 'avant' | 'apres';
+  label: string;
+  description: string;
+  ordre: number;
+  is_required: number;
+}
+
+export interface DossierPhoto {
+  id_photo: number;
+  id_dossier: number;
+  id_travaux: number | null;
+  id_photo_requirement: number;
+  phase: 'avant' | 'apres';
+  file_path: string;
+  file_name: string;
+  taken_by: number | null;
+  geolat: string | null;
+  geolng: string | null;
+  taken_at: string;
+  date_creation: string;
+}
+
 // ─── Users ───────────────────────────────────────────────────────────────────
 
 export const USERS: Record<Role, UserProfile> = {
@@ -149,6 +183,7 @@ export const DOSSIERS_ARTISAN: Dossier[] = [
     address: '12 rue des Lilas, 75011 Paris',
     phone: '06 12 34 56 78',
     types: ['PAC', 'BALLON'],
+    travaux: [],
     avantStatus: 'pending',
     apresStatus: 'locked',
     assignedTo: 'Lucas M.',
@@ -160,6 +195,7 @@ export const DOSSIERS_ARTISAN: Dossier[] = [
     address: '8 av. Victor Hugo, 69006 Lyon',
     phone: '06 98 76 54 32',
     types: ['PAC', 'BALLON', 'ISOLATION'],
+    travaux: [],
     avantStatus: 'done',
     apresStatus: 'pending',
     avantRef: 'RF-1203',
@@ -173,6 +209,7 @@ export const DOSSIERS_ARTISAN: Dossier[] = [
     address: '25 chemin des Vignes, 33000 Bordeaux',
     phone: '07 56 78 12 34',
     types: ['ISOLATION'],
+    travaux: [],
     avantStatus: 'pending',
     apresStatus: 'locked',
   },
@@ -183,6 +220,7 @@ export const DOSSIERS_ARTISAN: Dossier[] = [
     address: '3 rue du Moulin, 44000 Nantes',
     phone: '06 45 67 89 01',
     types: ['CHAUDIERE'],
+    travaux: [],
     avantStatus: 'pending',
     apresStatus: 'locked',
   },
@@ -193,6 +231,7 @@ export const DOSSIERS_ARTISAN: Dossier[] = [
     address: '14 av. de la Paix, 67000 Strasbourg',
     phone: '06 78 90 12 34',
     types: ['PAC'],
+    travaux: [],
     avantStatus: 'done',
     apresStatus: 'done',
     avantRef: 'RF-1198',
@@ -210,6 +249,7 @@ export const DOSSIERS_SOUSTRAITANT: Dossier[] = [
     address: '12 rue des Lilas, 75011 Paris',
     phone: '06 12 34 56 78',
     types: ['PAC', 'BALLON'],
+    travaux: [],
     avantStatus: 'pending',
     apresStatus: 'locked',
     companyOrdre: 'Dupont Énergies',
@@ -222,6 +262,7 @@ export const DOSSIERS_SOUSTRAITANT: Dossier[] = [
     address: '8 av. du Gal de Gaulle, 92100 Boulogne',
     phone: '06 98 76 54 32',
     types: ['PAC', 'BALLON', 'ISOLATION'],
+    travaux: [],
     avantStatus: 'done',
     apresStatus: 'pending',
     avantRef: 'RF-1248',
@@ -241,6 +282,7 @@ export const DOSSIERS_OUVRIER: Dossier[] = [
     address: '12 rue des Lilas, 75011 Paris',
     phone: '06 12 34 56 78',
     types: ['PAC', 'BALLON'],
+    travaux: [],
     avantStatus: 'pending',
     apresStatus: 'locked',
     companyOrdre: 'Dupont Énergies',
@@ -252,6 +294,7 @@ export const DOSSIERS_OUVRIER: Dossier[] = [
     address: '25 chemin des Vignes, 33000 Bordeaux',
     phone: '07 56 78 12 34',
     types: ['ISOLATION'],
+    travaux: [],
     avantStatus: 'pending',
     apresStatus: 'locked',
     companyOrdre: 'Isol Therm SARL',

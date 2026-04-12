@@ -1,6 +1,7 @@
 import type { DossierType } from '@/constants/mock-data';
 import { PHOTOS_APRES, PHOTOS_AVANT } from '@/constants/mock-data';
 import { Colors, FontSize, FontWeight, Radius, Shadows } from '@/constants/theme';
+import { useAuth } from '@/context/AuthContext';
 import type { PhotoResult } from '@/services/certificall';
 import {
     SDK_AVAILABLE,
@@ -23,12 +24,19 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+interface RequirementItem {
+  id: number;
+  label: string;
+}
+
 export default function CameraScreen() {
   const router = useRouter();
+  const auth = useAuth();
   const params = useLocalSearchParams<{
     dossierId?: string;
     phase?: string;
     types?: string;
+    requirementsJson?: string;
   }>();
 
   const phase = (params.phase ?? 'avant') as 'avant' | 'apres';
@@ -36,12 +44,23 @@ export default function CameraScreen() {
   const dossierId = params.dossierId ?? 'DOSSIER';
   const reportToken = buildReportToken(dossierId, phase);
 
-  // Build photo list
-  const photoLabels = Array.from(
-    new Set(
-      types.flatMap((t) => (phase === 'avant' ? PHOTOS_AVANT[t] ?? [] : PHOTOS_APRES[t] ?? []))
-    )
-  );
+  // Parse API requirements if provided
+  const apiRequirements: RequirementItem[] = (() => {
+    try {
+      if (params.requirementsJson) return JSON.parse(params.requirementsJson);
+    } catch { /* fallback */ }
+    return [];
+  })();
+  const useApi = apiRequirements.length > 0;
+
+  // Build photo list — API requirements or hardcoded fallback
+  const photoLabels = useApi
+    ? apiRequirements.map((r) => r.label)
+    : Array.from(
+        new Set(
+          types.flatMap((t) => (phase === 'avant' ? PHOTOS_AVANT[t] ?? [] : PHOTOS_APRES[t] ?? []))
+        )
+      );
   const total = photoLabels.length;
 
   // ─── Permissions (only needed in mock mode) ──────────────────────────────
@@ -89,6 +108,22 @@ export default function CameraScreen() {
         dossierId,
       });
 
+      // Upload to server if API requirements mode
+      if (useApi && result.uri) {
+        const formData = new FormData();
+        formData.append('id_dossier', dossierId);
+        formData.append('id_photo_requirement', String(apiRequirements[currentIndex].id));
+        formData.append('phase', phase);
+        formData.append('geolat', String(result.latitude ?? 0));
+        formData.append('geolng', String(result.longitude ?? 0));
+        formData.append('photo', {
+          uri: result.uri,
+          name: `photo_${dossierId}_${phase}_${currentIndex}.jpg`,
+          type: 'image/jpeg',
+        } as any);
+        auth.uploadPhoto(formData).catch((e) => console.warn('Upload error:', e));
+      }
+
       const next = [...capturedPhotos];
       next[currentIndex] = result;
       setCapturedPhotos(next);
@@ -133,6 +168,22 @@ export default function CameraScreen() {
       }
 
       const result = buildMockPhotoResult(reportToken, photo?.uri ?? '', lat, lng);
+
+      // Upload to server if API requirements mode
+      if (useApi && photo?.uri) {
+        const formData = new FormData();
+        formData.append('id_dossier', dossierId);
+        formData.append('id_photo_requirement', String(apiRequirements[currentIndex].id));
+        formData.append('phase', phase);
+        formData.append('geolat', String(lat));
+        formData.append('geolng', String(lng));
+        formData.append('photo', {
+          uri: photo.uri,
+          name: `photo_${dossierId}_${phase}_${currentIndex}.jpg`,
+          type: 'image/jpeg',
+        } as any);
+        auth.uploadPhoto(formData).catch((e) => console.warn('Upload error:', e));
+      }
 
       const next = [...capturedPhotos];
       next[currentIndex] = result;

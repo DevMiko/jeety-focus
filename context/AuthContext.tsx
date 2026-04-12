@@ -1,4 +1,4 @@
-import type { ApiOuvrier, ApiRapport, ApiSousTraitant, Dossier, DossierType, Role, UserProfile } from '@/constants/mock-data';
+import type { ApiOuvrier, ApiRapport, ApiSousTraitant, Dossier, DossierPhoto, DossierType, PhotoRequirement, Role, UserProfile } from '@/constants/mock-data';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import NetInfo from '@react-native-community/netinfo';
 import axios from 'axios';
@@ -76,6 +76,11 @@ interface AuthContextType {
   getCompanies: () => Promise<{ id: string; name: string }[]>;
   saveChecklist: (dossierId: string, phase: string, checkedItems: string[]) => Promise<boolean>;
   loadChecklist: (dossierId: string, phase: string) => Promise<string[]>;
+
+  // ─── Photos ─────────────────────────────────────────────────────────────────
+  getPhotoRequirements: (idCeeFiches: number[]) => Promise<PhotoRequirement[]>;
+  getDossierPhotos: (idDossier: string) => Promise<DossierPhoto[]>;
+  uploadPhoto: (data: FormData) => Promise<DossierPhoto | null>;
 
   // ─── Storage helpers ────────────────────────────────────────────────────────
   asyncSave: (key: string, value: string) => Promise<void>;
@@ -196,6 +201,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       address: addr || '',
       phone: client.telephone || '',
       types: travaux.map((t: any) => t.type_travaux).filter(Boolean) as DossierType[],
+      travaux: travaux.map((t: any) => ({
+        id_travaux: Number(t.id_travaux),
+        type_travaux: t.type_travaux as DossierType,
+        id_cee_fiche: t.id_cee_fiche ? Number(t.id_cee_fiche) : null,
+        code_operation: t.code_operation || undefined,
+      })),
       avantStatus: 'pending',
       apresStatus: 'locked',
     };
@@ -516,6 +527,60 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return [];
   };
 
+  // ─── Photo requirements ─────────────────────────────────────────────────────
+
+  const getPhotoRequirements = async (idCeeFiches: number[]): Promise<PhotoRequirement[]> => {
+    if (!usertoken || idCeeFiches.length === 0) return [];
+    return new Promise((resolve) => {
+      apiAction({
+        action: 'get-photo-requirements',
+        token: usertoken,
+        id_cee_fiches: JSON.stringify(idCeeFiches),
+      }, (res) => {
+        resolve(res.data.requirements || []);
+      }, () => {
+        resolve([]);
+      });
+    });
+  };
+
+  // ─── Get dossier photos ─────────────────────────────────────────────────────
+
+  const getDossierPhotos = async (idDossier: string): Promise<DossierPhoto[]> => {
+    if (!usertoken) return [];
+    return new Promise((resolve) => {
+      apiAction({
+        action: 'get-photos',
+        token: usertoken,
+        id_dossier: idDossier,
+      }, (res) => {
+        resolve(res.data.photos || []);
+      }, () => {
+        resolve([]);
+      });
+    });
+  };
+
+  // ─── Upload photo ───────────────────────────────────────────────────────────
+
+  const uploadPhoto = async (formData: FormData): Promise<DossierPhoto | null> => {
+    if (!usertoken) return null;
+    formData.append('action', 'upload-photo');
+    formData.append('token', usertoken);
+    try {
+      const res = await axios.post(APP_BASE_URL + 'api/api.php', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      if (res.data.code === 'SUCCESS') {
+        return res.data as DossierPhoto;
+      }
+      return null;
+    } catch (e) {
+      console.log('uploadPhoto error:', e);
+      return null;
+    }
+  };
+
   // ─── Logout ─────────────────────────────────────────────────────────────────
 
   const doLogout = async () => {
@@ -695,6 +760,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         getCompanies,
         saveChecklist,
         loadChecklist,
+        getPhotoRequirements,
+        getDossierPhotos,
+        uploadPhoto,
         asyncSave,
         secureSave,
       }}

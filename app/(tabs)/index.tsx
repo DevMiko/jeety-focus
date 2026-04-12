@@ -19,9 +19,10 @@ import { Colors, FontSize, FontWeight, Radius } from '@/constants/theme';
 import { useAuth } from '@/context/AuthContext';
 import { useRole } from '@/hooks/use-role';
 import { useRouter } from 'expo-router';
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import {
     Image,
+    RefreshControl,
     ScrollView,
     StyleSheet,
     Text,
@@ -55,7 +56,8 @@ const POSEUR_OPTIONS: FilterOption[] = [
 
 export default function ListScreen() {
   const router = useRouter();
-  const { dossiers: apiDossiers } = useAuth();
+  const auth = useAuth();
+  const { dossiers: apiDossiers } = auth;
   const { role, user } = useRole();
   const [search, setSearch] = useState('');
   const [stageFilter, setStageFilter] = useState('tous');
@@ -63,6 +65,14 @@ export default function ListScreen() {
   const [poseurFilter, setPoseurFilter] = useState('tous');
   const [affectModal, setAffectModal] = useState(false);
   const [selectedDossier, setSelectedDossier] = useState<Dossier | null>(null);
+
+  // Pull-to-refresh
+  const [refreshing, setRefreshing] = useState(false);
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await auth.refreshDossiers();
+    setRefreshing(false);
+  }, [auth]);
 
   const dossiers = useMemo(() => {
     if (apiDossiers.length > 0) return apiDossiers;
@@ -167,6 +177,9 @@ export default function ListScreen() {
         style={styles.content}
         contentContainerStyle={styles.contentInner}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.blue} colors={[Colors.blue]} />
+        }
       >
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>{headerTitle}</Text>
