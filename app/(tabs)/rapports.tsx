@@ -48,20 +48,16 @@ const POSEUR_OPTIONS = [
 
 function RapportCard({
   rapport,
-  onPress,
   onRattacher,
 }: {
   rapport: RapportLibre;
-  onPress: (r: RapportLibre) => void;
   onRattacher: (r: RapportLibre) => void;
 }) {
   const phaseLabel = rapport.phase === 'Avant' ? 'Avant travaux' : 'Après travaux';
 
   return (
-    <TouchableOpacity
+    <View
       style={styles.card}
-      onPress={() => onPress(rapport)}
-      activeOpacity={0.85}
     >
       {/* Row 1: dash + type badges */}
       <View style={styles.cardTopRow}>
@@ -115,7 +111,7 @@ function RapportCard({
         <Text style={styles.rattacherIcon}>🔗</Text>
         <Text style={styles.rattacherText}>Rattacher à un dossier CEE</Text>
       </TouchableOpacity>
-    </TouchableOpacity>
+    </View>
   );
 }
 
@@ -231,10 +227,6 @@ export default function RapportsScreen() {
       .slice(0, 5);
   }, [refInput, auth.dossiers, rattachRapport, dossiersWithPhase]);
 
-  const handlePress = (rapport: RapportLibre) => {
-    router.push({ pathname: '/detail', params: { id: rapport.id, type: 'rapport' } });
-  };
-
   const handleOpenRattach = (rapport: RapportLibre) => {
     setRattachRapport(rapport);
     setRefInput('');
@@ -335,7 +327,6 @@ export default function RapportsScreen() {
             <RapportCard
               key={rapport.id}
               rapport={rapport}
-              onPress={handlePress}
               onRattacher={handleOpenRattach}
             />
           ))
