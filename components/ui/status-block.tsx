@@ -13,41 +13,33 @@ interface StatusBlockProps {
   date?: string;
 }
 
-const CHECK_SVG_PLACEHOLDER = '✓';
-
-function StatusIcon({ status }: { status: PhotoStatus }) {
-  const s = styles[status];
-  return (
-    <View style={[styles.iconBase, s]}>
-      <Text style={styles.iconText}>
-        {status === 'done' ? '✓' : status === 'pending' ? '⏱' : '🔒'}
-      </Text>
-    </View>
-  );
-}
+const CONFIG: Record<PhotoStatus, { bg: string; iconBg: string; icon: string; iconColor: string; labelColor: string; subText: string }> = {
+  done:    { bg: '#ecfdf5', iconBg: '#10b981', icon: '✓',  iconColor: '#fff', labelColor: '#065f46', subText: 'Rapport fait' },
+  pending: { bg: '#fff7ed', iconBg: '#f59e0b', icon: '📷', iconColor: '#fff', labelColor: '#92400e', subText: 'À photographier' },
+  locked:  { bg: '#f3f4f6', iconBg: '#d1d5db', icon: '🔒', iconColor: '#fff', labelColor: '#9ca3af', subText: '—' },
+};
 
 export function StatusBlock({ label, status, ref: refStr, date }: StatusBlockProps) {
+  const c = CONFIG[status];
+
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: c.bg }]}>
+      {/* Icon + label row */}
       <View style={styles.header}>
-        <Text style={styles.label}>{label}</Text>
-        <StatusIcon status={status} />
-      </View>
-      {refStr ? (
-        <Text style={styles.info}>
-          <Text style={styles.infoRef}>{refStr}</Text>
-          {date ? <Text style={styles.infoDate}> • {date}</Text> : null}
-        </Text>
-      ) : (
-        <View style={styles.dashRow}>
-          {status === 'pending' ? (
-            <View style={styles.waitingTag}>
-              <Text style={styles.waitingText}>En attente</Text>
-            </View>
-          ) : (
-            <Text style={styles.dash}>—</Text>
-          )}
+        <View style={[styles.iconCircle, { backgroundColor: c.iconBg }]}>
+          <Text style={[styles.iconText, { color: c.iconColor }]}>{c.icon}</Text>
         </View>
+        <Text style={[styles.label, { color: c.labelColor }]}>{label}</Text>
+      </View>
+
+      {/* Detail row */}
+      {status === 'done' && refStr ? (
+        <View style={styles.detailRow}>
+          <Text style={styles.refText}>{refStr}</Text>
+          {date ? <Text style={styles.dateText}> • {date}</Text> : null}
+        </View>
+      ) : (
+        <Text style={[styles.subText, { color: c.labelColor }]}>{c.subText}</Text>
       )}
     </View>
   );
@@ -56,65 +48,47 @@ export function StatusBlock({ label, status, ref: refStr, date }: StatusBlockPro
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.gray50,
-    borderRadius: Radius.sm,
-    paddingHorizontal: 8,
-    paddingVertical: 6,
+    borderRadius: Radius.md,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
   },
   header: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 2,
+    gap: 6,
+    marginBottom: 3,
   },
-  label: {
-    fontSize: FontSize.sm,
-    fontWeight: FontWeight.semibold,
-    color: Colors.gray500,
-  },
-  iconBase: {
-    width: 16,
-    height: 16,
-    borderRadius: Radius.xs,
+  iconCircle: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  done: { backgroundColor: Colors.green },
-  pending: { backgroundColor: Colors.orange },
-  locked: { backgroundColor: Colors.gray300 },
   iconText: {
-    fontSize: 8,
-    color: Colors.white,
+    fontSize: 10,
     fontWeight: FontWeight.bold,
   },
-  info: {
-    fontSize: FontSize.xs,
+  label: {
+    fontSize: FontSize.sm,
+    fontWeight: FontWeight.bold,
   },
-  infoRef: {
+  detailRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginLeft: 26,
+  },
+  refText: {
+    fontSize: FontSize.xs,
     color: Colors.blue,
     fontWeight: FontWeight.bold,
   },
-  infoDate: {
-    color: Colors.gray400,
-  },
-  dashRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    minHeight: 14,
-  },
-  waitingTag: {
-    backgroundColor: '#fef3c7',
-    borderRadius: Radius.xs,
-    paddingHorizontal: 5,
-    paddingVertical: 1,
-  },
-  waitingText: {
+  dateText: {
     fontSize: FontSize.xs,
-    color: '#b45309',
-    fontWeight: FontWeight.extrabold,
-  },
-  dash: {
     color: Colors.gray400,
-    fontSize: FontSize.base,
+  },
+  subText: {
+    fontSize: FontSize.xs,
+    marginLeft: 26,
   },
 });

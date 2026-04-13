@@ -2,20 +2,23 @@ import type { DossierPhoto, DossierType, PhotoRequirement } from '@/constants/mo
 import { PHOTOS_APRES, PHOTOS_AVANT } from '@/constants/mock-data';
 import { Colors, FontSize, FontWeight, Radius, Shadows } from '@/constants/theme';
 import React from 'react';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Linking, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 interface PhotoChecklistProps {
   phase: 'avant' | 'apres';
   types: DossierType[];
-  /** API-driven requirements (if available, overrides hardcoded labels) */
   requirements?: PhotoRequirement[];
-  /** Photos already taken for this dossier+phase */
   photos?: DossierPhoto[];
-  /** Legacy: locally checked labels (fallback when no API requirements) */
   checkedItems?: string[];
   onToggle?: (label: string) => void;
   locked?: boolean;
   onStartCamera?: () => void;
+  /** Rapport info (when a report already exists for this phase) */
+  rapportRef?: string;
+  rapportDate?: string;
+  rapportPdfUrl?: string;
+  /** Direct photo labels (e.g. from rapport photos) — overrides requirements/fallback */
+  photoLabels?: string[];
 }
 
 export function PhotoChecklist({
@@ -27,58 +30,74 @@ export function PhotoChecklist({
   onToggle,
   locked = false,
   onStartCamera,
+  rapportRef,
+  rapportDate,
+  rapportPdfUrl,
+  photoLabels,
 }: PhotoChecklistProps) {
-  // Build checklist items — API requirements take priority, fallback to hardcoded
-  const useApi = requirements && requirements.length > 0;
-  const phaseRequirements = useApi
-    ? requirements.filter((r) => r.phase === phase)
-    : [];
+  const hasRapport = !!rapportRef;
 
-  // Fallback: hardcoded labels
-  const fallbackLabels = Array.from(
-    new Set(types.flatMap((t) => (phase === 'avant' ? PHOTOS_AVANT[t] : PHOTOS_APRES[t])))
-  );
+  // Build checklist items
+  const useApi = !!(requirements && requirements.length > 0);
+  let items: { key: string; label: string; requirementId: number | null; isDone: boolean }[];
 
-  const items = useApi
-    ? phaseRequirements.map((r) => ({
-        key: String(r.id_photo_requirement),
-        label: r.label,
-        requirementId: r.id_photo_requirement,
-        isDone: (photos || []).some((p) => p.id_photo_requirement === r.id_photo_requirement),
-      }))
-    : fallbackLabels.map((label) => ({
-        key: label,
-        label,
-        requirementId: null as number | null,
-        isDone: checkedItems.includes(label),
-      }));
+  if (photoLabels && photoLabels.length > 0) {
+    items = photoLabels.map((label, i) => ({
+      key: `photo-${i}`,
+      label,
+      requirementId: null,
+      isDone: true,
+    }));
+  } else {
+    const phaseRequirements = useApi
+      ? requirements.filter((r) => r.phase === phase)
+      : [];
 
-  const allDone = items.length > 0 && items.every((i) => i.isDone);
+    const fallbackLabels = Array.from(
+      new Set(types.flatMap((t) => (phase === 'avant' ? PHOTOS_AVANT[t] : PHOTOS_APRES[t])))
+    );
+
+    items = useApi
+      ? phaseRequirements.map((r) => ({
+          key: String(r.id_photo_requirement),
+          label: r.label,
+          requirementId: r.id_photo_requirement,
+          isDone: hasRapport || (photos || []).some((p) => p.id_photo_requirement === r.id_photo_requirement),
+        }))
+      : fallbackLabels.map((label) => ({
+          key: label,
+          label,
+          requirementId: null as number | null,
+          isDone: hasRapport || checkedItems.includes(label),
+        }));
+  }
+
   const doneCount = items.filter((i) => i.isDone).length;
 
-  const cardBorderColor = locked
-    ? 'transparent'
-    : allDone
-    ? 'transparent'
-    : Colors.blue;
-
+  // Status label + style
   const statusLabel = locked
     ? 'Verrouillé'
-    : allDone
-    ? `Terminé (${doneCount}/${items.length})`
-    : `En cours (${doneCount}/${items.length})`;
+    : hasRapport
+    ? `${rapportRef} • ${rapportDate}`
+    : `En attente`;
 
   const statusStyle = locked
     ? styles.statusLocked
-    : allDone
+    : hasRapport
     ? styles.statusDone
     : styles.statusPending;
+
+  const cardBorderColor = locked
+    ? 'transparent'
+    : hasRapport
+    ? '#10b981'
+    : Colors.blue;
 
   return (
     <View style={[styles.card, { borderColor: cardBorderColor }, locked && styles.cardLocked]}>
       <View style={styles.header}>
         <Text style={styles.title}>
-          {phase === 'avant' ? 'Avant travaux' : 'Après travaux'}
+          {items.length} photo{items.length > 1 ? 's' : ''}{hasRapport ? '' : ' requises'}
         </Text>
         <View style={[styles.statusTag, statusStyle]}>
           <Text style={[styles.statusText, statusStyle]}>{statusLabel}</Text>
@@ -90,9 +109,9 @@ export function PhotoChecklist({
           <TouchableOpacity
             key={item.key}
             style={[styles.item, item.isDone && styles.itemDone]}
-            onPress={() => !locked && onToggle?.(item.label)}
-            activeOpacity={locked ? 1 : 0.7}
-            disabled={locked || useApi}
+            onPress={() => !locked && !hasRapport && onToggle?.(item.label)}
+            activeOpacity={locked || hasRapport ? 1 : 0.7}
+            disabled={locked || useApi || hasRapport}
           >
             <View style={[styles.itemIcon, item.isDone && styles.itemIconDone]}>
               <Text style={styles.itemIconText}>{item.isDone ? '✓' : '📷'}</Text>
@@ -104,17 +123,24 @@ export function PhotoChecklist({
         ))}
       </View>
 
-      {!locked && onStartCamera && (
+      {/* Bouton principal */}
+      {hasRapport && rapportPdfUrl ? (
         <TouchableOpacity
-          style={[styles.cameraBtn, allDone && styles.cameraBtnDone]}
+          style={styles.viewBtn}
+          onPress={() => Linking.openURL(rapportPdfUrl)}
+          activeOpacity={0.85}
+        >
+          <Text style={styles.viewBtnText}>✓ Voir le rapport</Text>
+        </TouchableOpacity>
+      ) : !locked && onStartCamera ? (
+        <TouchableOpacity
+          style={styles.cameraBtn}
           onPress={onStartCamera}
           activeOpacity={0.85}
         >
-          <Text style={styles.cameraBtnText}>
-            {allDone ? '✓ Photos complètes' : '📷 Prendre les photos'}
-          </Text>
+          <Text style={styles.cameraBtnText}>📷 Prendre les photos</Text>
         </TouchableOpacity>
-      )}
+      ) : null}
     </View>
   );
 }
@@ -208,11 +234,23 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  cameraBtnDone: {
-    backgroundColor: Colors.green,
-  },
   cameraBtnText: {
     color: Colors.white,
+    fontSize: FontSize.xl,
+    fontWeight: FontWeight.semibold,
+  },
+  viewBtn: {
+    width: '100%',
+    paddingVertical: 10,
+    borderRadius: Radius.lg,
+    backgroundColor: Colors.gray50,
+    borderWidth: 1,
+    borderColor: Colors.gray200,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  viewBtnText: {
+    color: Colors.gray600,
     fontSize: FontSize.xl,
     fontWeight: FontWeight.semibold,
   },

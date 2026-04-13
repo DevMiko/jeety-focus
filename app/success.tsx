@@ -4,6 +4,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
 import {
     Alert,
+    Linking,
     StyleSheet,
     Text,
     TouchableOpacity,
@@ -23,6 +24,8 @@ export default function SuccessScreen() {
     pdfUrl?: string;
     types?: string;
     address?: string;
+    clientName?: string;
+    rapportId?: string;
   }>();
 
   const phase = params.phase ?? 'avant';
@@ -37,26 +40,30 @@ export default function SuccessScreen() {
   // Send rapport to backend on mount (only once)
   const sentRef = useRef(false);
   const [synced, setSynced] = useState(false);
+  const [rapportId, setRapportId] = useState<number | null>(null);
+  const [pdfReady, setPdfReady] = useState(false);
 
   useEffect(() => {
     if (sentRef.current) return;
     sentRef.current = true;
     (async () => {
       try {
-        const rapportId = await auth.createRapport({
-          phase,
-          reference_rapport: rfNumber,
-          photo_count: Number(photoCount),
-          certified_at: certifiedAt,
-          types: params.types ?? '',
-          address: params.address ?? '',
-          dossier_ref: params.dossierRef ?? '',
-        });
-        if (rapportId) {
+        // Le rapport est toujours pré-créé (dans detail.tsx ou create.tsx)
+        const id = params.rapportId ? Number(params.rapportId) : null;
+
+        if (id) {
           setSynced(true);
+          setRapportId(id);
+          // Générer le PDF après un délai pour laisser les uploads terminer
+          setTimeout(async () => {
+            try {
+              await auth.generatePdf(id);
+              setPdfReady(true);
+            } catch {}
+          }, 3000);
         }
       } catch {
-        // API not ready — data will be queued offline
+        // API not ready
       }
     })();
   }, []);
@@ -120,15 +127,20 @@ export default function SuccessScreen() {
 
         {/* ─── Actions ─── */}
         <TouchableOpacity
-          style={styles.btnDownload}
-          onPress={() =>
-            pdfUrl
-              ? Alert.alert('PDF disponible', pdfUrl)
-              : Alert.alert('PDF', 'Le PDF Certificall sera disponible une fois les credentials configurés.')
-          }
+          style={[styles.btnDownload, !pdfReady && { opacity: 0.5 }]}
+          onPress={() => {
+            if (rapportId && pdfReady) {
+              const url = auth.getPdfUrl(rapportId);
+              Linking.openURL(url);
+            } else if (rapportId && !pdfReady) {
+              Alert.alert('PDF en cours', 'Le PDF est en cours de génération, veuillez patienter quelques secondes\u2026');
+            } else {
+              Alert.alert('PDF', 'Le rapport n\u2019a pas encore été synchronisé. Réessayez dans quelques instants.');
+            }
+          }}
           activeOpacity={0.85}
         >
-          <Text style={styles.btnDownloadText}>📥 Télécharger le PDF</Text>
+          <Text style={styles.btnDownloadText}>{pdfReady ? '📥 Télécharger le PDF' : '⏳ Génération du PDF…'}</Text>
         </TouchableOpacity>
 
         <TouchableOpacity

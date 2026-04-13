@@ -36,12 +36,18 @@ export default function CameraScreen() {
     dossierId?: string;
     phase?: string;
     types?: string;
+    clientName?: string;
+    address?: string;
     requirementsJson?: string;
+    rapportId?: string;
   }>();
 
   const phase = (params.phase ?? 'avant') as 'avant' | 'apres';
   const types = (params.types ?? 'PAC').split(',') as DossierType[];
   const dossierId = params.dossierId ?? 'DOSSIER';
+  const clientName = params.clientName ?? '';
+  const address = params.address ?? '';
+  const rapportId = params.rapportId ?? '';
   const reportToken = buildReportToken(dossierId, phase);
 
   // Parse API requirements if provided
@@ -52,6 +58,8 @@ export default function CameraScreen() {
     return [];
   })();
   const useApi = apiRequirements.length > 0;
+  const hasDossier = dossierId !== 'DOSSIER' && dossierId !== '' && !isNaN(Number(dossierId));
+  const hasRapportId = rapportId !== '' && rapportId !== '0';
 
   // Build photo list — API requirements or hardcoded fallback
   const photoLabels = useApi
@@ -108,20 +116,24 @@ export default function CameraScreen() {
         dossierId,
       });
 
-      // Upload to server if API requirements mode
-      if (useApi && result.uri) {
+      // Upload vers le serveur — toujours via id_rapport
+      if (hasRapportId && result.uri) {
         const formData = new FormData();
-        formData.append('id_dossier', dossierId);
-        formData.append('id_photo_requirement', String(apiRequirements[currentIndex].id));
+        formData.append('id_rapport', rapportId);
         formData.append('phase', phase);
+        formData.append('photo_label', photoLabels[currentIndex] || '');
         formData.append('geolat', String(result.latitude ?? 0));
         formData.append('geolng', String(result.longitude ?? 0));
         formData.append('photo', {
           uri: result.uri,
-          name: `photo_${dossierId}_${phase}_${currentIndex}.jpg`,
+          name: `photo_${rapportId}_${phase}_${currentIndex}.jpg`,
           type: 'image/jpeg',
         } as any);
-        auth.uploadPhoto(formData).catch((e) => console.warn('Upload error:', e));
+        try {
+          await auth.uploadPhoto(formData);
+        } catch (e) {
+          console.warn('Upload photo error (SDK):', e);
+        }
       }
 
       const next = [...capturedPhotos];
@@ -169,20 +181,24 @@ export default function CameraScreen() {
 
       const result = buildMockPhotoResult(reportToken, photo?.uri ?? '', lat, lng);
 
-      // Upload to server if API requirements mode
-      if (useApi && photo?.uri) {
+      // Upload vers le serveur — toujours via id_rapport
+      if (hasRapportId && photo?.uri) {
         const formData = new FormData();
-        formData.append('id_dossier', dossierId);
-        formData.append('id_photo_requirement', String(apiRequirements[currentIndex].id));
+        formData.append('id_rapport', rapportId);
         formData.append('phase', phase);
+        formData.append('photo_label', photoLabels[currentIndex] || '');
         formData.append('geolat', String(lat));
         formData.append('geolng', String(lng));
         formData.append('photo', {
           uri: photo.uri,
-          name: `photo_${dossierId}_${phase}_${currentIndex}.jpg`,
+          name: `photo_${rapportId}_${phase}_${currentIndex}.jpg`,
           type: 'image/jpeg',
         } as any);
-        auth.uploadPhoto(formData).catch((e) => console.warn('Upload error:', e));
+        try {
+          await auth.uploadPhoto(formData);
+        } catch (e) {
+          console.warn('Upload photo error (mock):', e);
+        }
       }
 
       const next = [...capturedPhotos];
@@ -219,6 +235,10 @@ export default function CameraScreen() {
           certifiedAt: summary.certifiedAtFormatted,
           photoCount: summary.photoCount.toString(),
           pdfUrl: summary.pdfUrl,
+          types: params.types ?? '',
+          address,
+          clientName,
+          rapportId,
         },
       });
     } catch (err) {
@@ -232,6 +252,10 @@ export default function CameraScreen() {
           reportNumber: reportToken,
           certifiedAt: getNow().date,
           photoCount: validPhotos.length.toString(),
+          types: params.types ?? '',
+          address,
+          clientName,
+          rapportId,
         },
       });
     }

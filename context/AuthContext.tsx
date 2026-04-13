@@ -82,6 +82,10 @@ interface AuthContextType {
   getDossierPhotos: (idDossier: string) => Promise<DossierPhoto[]>;
   uploadPhoto: (data: FormData) => Promise<DossierPhoto | null>;
 
+  // ─── PDF ─────────────────────────────────────────────────────────────────────
+  getPdfUrl: (idRapport: number | string) => string;
+  generatePdf: (idRapport: number | string) => Promise<string | null>;
+
   // ─── Storage helpers ────────────────────────────────────────────────────────
   asyncSave: (key: string, value: string) => Promise<void>;
   secureSave: (key: string, value: string) => Promise<void>;
@@ -194,6 +198,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const client = d.client || {};
     const travaux = d.travaux || [];
     const addr = [client.adresse, client.code_postal, client.ville].filter(Boolean).join(', ');
+
+    // Statuts avant/après basés sur les rapports réels
+    const rapAvant = d.rapport_avant;
+    const rapApres = d.rapport_apres;
+    const avantDone = !!rapAvant;
+    const apresDone = !!rapApres;
+
+    const formatDate = (dateStr: string) => {
+      const dt = new Date(dateStr);
+      return `${dt.getDate().toString().padStart(2, '0')}/${(dt.getMonth() + 1).toString().padStart(2, '0')}/${String(dt.getFullYear()).slice(2)}`;
+    };
+
     return {
       id: String(d.id_dossier),
       ref: d.reference_dossier || '',
@@ -207,8 +223,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         id_cee_fiche: t.id_cee_fiche ? Number(t.id_cee_fiche) : null,
         code_operation: t.code_operation || undefined,
       })),
-      avantStatus: 'pending',
-      apresStatus: 'locked',
+      avantStatus: avantDone ? 'done' : 'pending',
+      apresStatus: apresDone ? 'done' : avantDone ? 'pending' : 'locked',
+      avantRef: rapAvant?.reference ?? undefined,
+      avantDate: rapAvant ? formatDate(rapAvant.date) : undefined,
+      apresRef: rapApres?.reference ?? undefined,
+      apresDate: rapApres ? formatDate(rapApres.date) : undefined,
+      assignedTo: rapApres?.operateur || rapAvant?.operateur || undefined,
+      isSousTraite: !!d.has_sous_traitant,
     };
   };
 
@@ -564,21 +586,45 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // ─── Upload photo ───────────────────────────────────────────────────────────
 
   const uploadPhoto = async (formData: FormData): Promise<DossierPhoto | null> => {
-    if (!usertoken) return null;
+    if (!usertoken) { console.warn('uploadPhoto: pas de token'); return null; }
     formData.append('action', 'upload-photo');
     formData.append('token', usertoken);
     try {
       const res = await axios.post(APP_BASE_URL + 'api/api.php', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
+        timeout: 30000,
       });
+      console.log('uploadPhoto response:', JSON.stringify(res.data));
       if (res.data.code === 'SUCCESS') {
         return res.data as DossierPhoto;
       }
+      console.warn('uploadPhoto API error:', res.data.message || res.data);
       return null;
-    } catch (e) {
-      console.log('uploadPhoto error:', e);
+    } catch (e: any) {
+      console.warn('uploadPhoto network error:', e?.message || e);
       return null;
     }
+  };
+
+  // ─── PDF ────────────────────────────────────────────────────────────────────
+
+  const getPdfUrl = (idRapport: number | string): string => {
+    return APP_BASE_URL + 'api/api.php?action=download-pdf&id_rapport=' + idRapport + '&token=' + (usertoken ?? '');
+  };
+
+  const generatePdf = async (idRapport: number | string): Promise<string | null> => {
+    if (!usertoken) return null;
+    return new Promise((resolve) => {
+      apiAction({
+        action: 'generate-pdf',
+        token: usertoken,
+        id_rapport: String(idRapport),
+      }, (res) => {
+        resolve(res.data.pdf_url ?? null);
+      }, () => {
+        resolve(null);
+      });
+    });
   };
 
   // ─── Logout ─────────────────────────────────────────────────────────────────
@@ -763,6 +809,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         getPhotoRequirements,
         getDossierPhotos,
         uploadPhoto,
+        getPdfUrl,
+        generatePdf,
         asyncSave,
         secureSave,
       }}

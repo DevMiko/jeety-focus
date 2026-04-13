@@ -103,8 +103,13 @@ export default function ListScreen() {
     if (typeFilter !== 'tous') {
       list = list.filter((d) => d.types.includes(typeFilter as any));
     }
+    if (poseurFilter !== 'tous') {
+      list = list.filter((d) =>
+        poseurFilter === 'soustraite' ? d.isSousTraite : !d.isSousTraite
+      );
+    }
     return list;
-  }, [dossiers, search, stageFilter, typeFilter]);
+  }, [dossiers, search, stageFilter, typeFilter, poseurFilter]);
 
   const handleDossierPress = (dossier: Dossier) => {
     router.push({ pathname: '/detail', params: { id: dossier.id } });

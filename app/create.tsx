@@ -5,16 +5,16 @@ import { useRole } from '@/hooks/use-role';
 import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
-    ActivityIndicator,
-    Alert,
-    KeyboardAvoidingView,
-    Platform,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -106,6 +106,7 @@ export default function CreateScreen() {
   const auth = useAuth();
 
   // Section 1 state
+  const [clientName, setClientName] = useState('');
   const [address, setAddress] = useState('');
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [companyOrdre, setCompanyOrdre] = useState('');
@@ -182,19 +183,36 @@ export default function CreateScreen() {
     phase !== null &&
     selectedTypes.length > 0;
 
-  const handleSubmit = () => {
-    if (!canSubmit) {
-      Alert.alert('Champs requis', 'Veuillez compléter toutes les sections avant de continuer.');
+  const [isCreating, setIsCreating] = useState(false);
+
+  const handleSubmit = async () => {
+    if (!canSubmit || isCreating) {
+      if (!canSubmit) Alert.alert('Champs requis', 'Veuillez compléter toutes les sections avant de continuer.');
       return;
     }
-    router.push({
-      pathname: '/camera',
-      params: {
+    setIsCreating(true);
+    try {
+      // Créer le rapport libre AVANT d'ouvrir la caméra
+      const id = await auth.createRapport({
         phase: phase!,
         types: selectedTypes.join(','),
-        address,
-      },
-    });
+        client_address: address,
+        client_name: clientName.trim(),
+      });
+      router.push({
+        pathname: '/camera',
+        params: {
+          phase: phase!,
+          types: selectedTypes.join(','),
+          address,
+          rapportId: id ? String(id) : '',
+        },
+      });
+    } catch {
+      Alert.alert('Erreur', 'Impossible de créer le rapport. Réessayez.');
+    } finally {
+      setIsCreating(false);
+    }
   };
 
   // ─── Section 1: label changes by role ────────────────────────────────
@@ -234,14 +252,23 @@ export default function CreateScreen() {
               <Text style={styles.sectionTitle}>{section1Title}</Text>
             </View>
 
-            {/* ARTISAN — address autocomplete */}
+            {/* ARTISAN — nom + address */}
             {role === 'artisan' && (
               <View style={styles.autocompleteWrapper}>
+                <Text style={styles.fieldLabel}>Nom / Raison sociale</Text>
+                <TextInput
+                  style={styles.input}
+                  value={clientName}
+                  onChangeText={setClientName}
+                  placeholder="Ex: M. Jean DUPONT"
+                  placeholderTextColor={Colors.gray400}
+                />
+                <Text style={[styles.fieldLabel, { marginTop: 10 }]}>Adresse des travaux</Text>
                 <TextInput
                   style={styles.input}
                   value={address}
                   onChangeText={handleAddressChange}
-                  placeholder="Adresse du bénéficiaire..."
+                  placeholder="Commencez à taper une adresse..."
                   placeholderTextColor={Colors.gray400}
                   onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
                 />
@@ -458,6 +485,12 @@ const styles = StyleSheet.create({
   },
 
   // Input
+  fieldLabel: {
+    fontSize: FontSize.sm,
+    fontWeight: FontWeight.semibold,
+    color: Colors.gray500,
+    marginBottom: 4,
+  },
   input: {
     borderWidth: 2,
     borderColor: Colors.gray200,

@@ -8,6 +8,7 @@ import { useRole } from '@/hooks/use-role';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
+    Alert,
     Linking,
     ScrollView,
     StyleSheet,
@@ -36,8 +37,15 @@ export default function DetailScreen() {
 
   // Calculer le statut avant/après depuis les rapports rattachés
   const rattachedRapports = auth.rapports.filter((r) => dossier && String(r.id_dossier) === dossier.id);
-  const hasRapportAvant = rattachedRapports.some((r) => r.phase === 'Avant');
-  const hasRapportApres = rattachedRapports.some((r) => r.phase === 'Après');
+  const rapportAvant = rattachedRapports.find((r) => r.phase === 'Avant');
+  const rapportApres = rattachedRapports.find((r) => r.phase === 'Après');
+  const hasRapportAvant = !!rapportAvant;
+  const hasRapportApres = !!rapportApres;
+
+  const formatDate = (dateStr: string) => {
+    const dt = new Date(dateStr);
+    return `${dt.getDate().toString().padStart(2, '0')}/${(dt.getMonth() + 1).toString().padStart(2, '0')}/${String(dt.getFullYear()).slice(2)}`;
+  };
 
   // ─── Photo requirements + photos from API ────────────────────────────────
   const [requirements, setRequirements] = useState<PhotoRequirement[]>([]);
@@ -158,15 +166,7 @@ export default function DetailScreen() {
           )}
         </View>
 
-        {/* Rattacher rapport (artisan only) */}
-        {role === 'artisan' && (
-          <TouchableOpacity
-            style={styles.rattacherBtn}
-            onPress={() => router.push('/rapports')}
-          >
-            <Text style={styles.rattacherText}>+ Rattacher un rapport libre</Text>
-          </TouchableOpacity>
-        )}
+
       </View>
 
       {/* ─── Scrollable content ─── */}
@@ -175,24 +175,25 @@ export default function DetailScreen() {
         contentContainerStyle={styles.contentPadding}
         showsVerticalScrollIndicator={false}
       >
-        {/* Rapports rattachés */}
-        {rattachedRapports.length > 0 && (
-          <View style={styles.rapportsSection}>
-            {rattachedRapports.map((r) => (
-              <View key={r.id_rapport} style={styles.rapportTag}>
-                <Text style={styles.rapportTagIcon}>{r.phase === 'Avant' ? '📋' : '📋'}</Text>
-                <Text style={styles.rapportTagText}>
-                  Rapport {r.phase} — {r.reference_rapport}
-                </Text>
-                <Text style={styles.rapportTagCheck}>✓</Text>
-              </View>
-            ))}
-          </View>
+        {/* Rapport avant tag */}
+        {rapportAvant && (
+          <TouchableOpacity
+            style={styles.rapportTag}
+            activeOpacity={0.7}
+            onPress={() => Linking.openURL(auth.getPdfUrl(rapportAvant.id_rapport))}
+          >
+            <Text style={styles.rapportTagIcon}>📋</Text>
+            <Text style={styles.rapportTagText}>
+              Rapport Avant — {rapportAvant.reference_rapport}
+            </Text>
+            <Text style={styles.rapportTagCheck}>📄</Text>
+          </TouchableOpacity>
         )}
 
         {/* Avant travaux */}
         <View style={styles.sectionTitle}>
-          <Text style={styles.sectionLabel}>📷 Photos avant travaux</Text>
+          <View style={[styles.sectionDot, hasRapportAvant ? styles.dotGreen : styles.dotOrange]} />
+          <Text style={styles.sectionLabel}>Photos avant travaux</Text>
         </View>
         <PhotoChecklist
           phase="avant"
@@ -202,26 +203,60 @@ export default function DetailScreen() {
           checkedItems={avantChecked}
           onToggle={handleToggleAvant}
           locked={avantLocked}
-          onStartCamera={() =>
-            router.push({
-              pathname: '/camera',
-              params: {
-                dossierId: dossier.id,
-                phase: 'avant',
+          rapportRef={rapportAvant?.reference_rapport}
+          rapportDate={rapportAvant ? formatDate(rapportAvant.date_creation) : undefined}
+          rapportPdfUrl={rapportAvant ? auth.getPdfUrl(rapportAvant.id_rapport) : undefined}
+          onStartCamera={async () => {
+            try {
+              const id = await auth.createRapport({
+                phase: 'Avant',
                 types: dossier.types.join(','),
-                requirementsJson: JSON.stringify(
-                  requirements
-                    .filter((r) => r.phase === 'avant')
-                    .map((r) => ({ id: r.id_photo_requirement, label: r.label }))
-                ),
-              },
-            })
-          }
+                client_name: dossier.clientName,
+                client_address: dossier.address,
+                id_dossier: dossier.id,
+              });
+              if (!id) { Alert.alert('Erreur', 'Impossible de créer le rapport.'); return; }
+              router.push({
+                pathname: '/camera',
+                params: {
+                  dossierId: dossier.id,
+                  phase: 'avant',
+                  types: dossier.types.join(','),
+                  clientName: dossier.clientName,
+                  address: dossier.address,
+                  rapportId: String(id),
+                  requirementsJson: JSON.stringify(
+                    requirements
+                      .filter((r) => r.phase === 'avant')
+                      .map((r) => ({ id: r.id_photo_requirement, label: r.label }))
+                  ),
+                },
+              });
+            } catch {
+              Alert.alert('Erreur', 'Impossible de créer le rapport.');
+            }
+          }}
         />
+
+        {/* Rapport après tag */}
+        {rapportApres && (
+          <TouchableOpacity
+            style={[styles.rapportTag, { marginTop: 12 }]}
+            activeOpacity={0.7}
+            onPress={() => Linking.openURL(auth.getPdfUrl(rapportApres.id_rapport))}
+          >
+            <Text style={styles.rapportTagIcon}>📋</Text>
+            <Text style={styles.rapportTagText}>
+              Rapport Après — {rapportApres.reference_rapport}
+            </Text>
+            <Text style={styles.rapportTagCheck}>📄</Text>
+          </TouchableOpacity>
+        )}
 
         {/* Après travaux */}
         <View style={[styles.sectionTitle, { marginTop: 12 }]}>
-          <Text style={styles.sectionLabel}>📷 Photos après travaux</Text>
+          <View style={[styles.sectionDot, hasRapportApres ? styles.dotGreen : styles.dotOrange]} />
+          <Text style={styles.sectionLabel}>Photos après travaux</Text>
         </View>
         <PhotoChecklist
           phase="apres"
@@ -231,21 +266,39 @@ export default function DetailScreen() {
           checkedItems={apresChecked}
           onToggle={handleToggleApres}
           locked={apresLocked}
-          onStartCamera={() =>
-            router.push({
-              pathname: '/camera',
-              params: {
-                dossierId: dossier.id,
-                phase: 'apres',
+          rapportRef={rapportApres?.reference_rapport}
+          rapportDate={rapportApres ? formatDate(rapportApres.date_creation) : undefined}
+          rapportPdfUrl={rapportApres ? auth.getPdfUrl(rapportApres.id_rapport) : undefined}
+          onStartCamera={async () => {
+            try {
+              const id = await auth.createRapport({
+                phase: 'Après',
                 types: dossier.types.join(','),
-                requirementsJson: JSON.stringify(
-                  requirements
-                    .filter((r) => r.phase === 'apres')
-                    .map((r) => ({ id: r.id_photo_requirement, label: r.label }))
-                ),
-              },
-            })
-          }
+                client_name: dossier.clientName,
+                client_address: dossier.address,
+                id_dossier: dossier.id,
+              });
+              if (!id) { Alert.alert('Erreur', 'Impossible de créer le rapport.'); return; }
+              router.push({
+                pathname: '/camera',
+                params: {
+                  dossierId: dossier.id,
+                  phase: 'apres',
+                  types: dossier.types.join(','),
+                  clientName: dossier.clientName,
+                  address: dossier.address,
+                  rapportId: String(id),
+                  requirementsJson: JSON.stringify(
+                    requirements
+                      .filter((r) => r.phase === 'apres')
+                      .map((r) => ({ id: r.id_photo_requirement, label: r.label }))
+                  ),
+                },
+              });
+            } catch {
+              Alert.alert('Erreur', 'Impossible de créer le rapport.');
+            }
+          }}
         />
       </ScrollView>
     </SafeAreaView>
@@ -336,21 +389,6 @@ const styles = StyleSheet.create({
     color: Colors.blue,
     fontWeight: FontWeight.medium,
   },
-  rattacherBtn: {
-    marginTop: 12,
-    borderWidth: 2,
-    borderColor: 'rgba(255,255,255,0.5)',
-    borderStyle: 'dashed',
-    borderRadius: Radius.lg,
-    paddingVertical: 10,
-    alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.12)',
-  },
-  rattacherText: {
-    color: Colors.white,
-    fontSize: FontSize.md,
-    fontWeight: FontWeight.semibold,
-  },
   content: {
     flex: 1,
   },
@@ -359,7 +397,21 @@ const styles = StyleSheet.create({
     paddingBottom: 40,
   },
   sectionTitle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
     marginBottom: 6,
+  },
+  sectionDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+  },
+  dotGreen: {
+    backgroundColor: '#10b981',
+  },
+  dotOrange: {
+    backgroundColor: '#f59e0b',
   },
   sectionLabel: {
     fontSize: FontSize.md,
@@ -371,10 +423,6 @@ const styles = StyleSheet.create({
     marginTop: 40,
     fontSize: FontSize.xl,
     color: Colors.gray500,
-  },
-  rapportsSection: {
-    marginBottom: 12,
-    gap: 6,
   },
   rapportTag: {
     flexDirection: 'row',

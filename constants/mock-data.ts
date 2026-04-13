@@ -24,9 +24,12 @@ export interface Dossier {
   apresStatus: PhotoStatus;
   avantRef?: string;
   avantDate?: string;
+  apresRef?: string;
+  apresDate?: string;
   assignedTo?: string;
   companyOrdre?: string;
   donneurOrdre?: string;
+  isSousTraite?: boolean;
 }
 
 export interface RapportLibre {
@@ -101,6 +104,13 @@ export interface ApiSousTraitant {
   rapport_count: number;
 }
 
+export interface ApiRapportPhoto {
+  id_photo: number;
+  photo_path: string;
+  photo_type: string;
+  order: number;
+}
+
 export interface ApiRapport {
   id_rapport: number;
   id_dossier: number | null;
@@ -114,6 +124,7 @@ export interface ApiRapport {
   assigned_to: number | null;
   via: string | null;
   date_creation: string;
+  photos?: ApiRapportPhoto[];
 }
 
 export interface PhotoRequirement {

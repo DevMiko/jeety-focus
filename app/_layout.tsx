@@ -23,10 +23,14 @@ export default function RootLayout() {
           <Stack.Screen name="(auth)/login" />
           <Stack.Screen name="(tabs)" />
           <Stack.Screen name="detail" options={{ animation: 'slide_from_right' }} />
+          <Stack.Screen name="rapport-detail" options={{ animation: 'slide_from_right' }} />
           <Stack.Screen name="camera" options={{ animation: 'slide_from_bottom' }} />
           <Stack.Screen name="create" options={{ animation: 'slide_from_bottom' }} />
           <Stack.Screen name="success" options={{ animation: 'fade' }} />
           <Stack.Screen name="guide" options={{ animation: 'slide_from_right' }} />
+          <Stack.Screen name="ouvriers" options={{ animation: 'slide_from_right' }} />
+          <Stack.Screen name="add-ouvrier" options={{ animation: 'slide_from_right' }} />
+          <Stack.Screen name="sous-traitants" options={{ animation: 'slide_from_right' }} />
           <Stack.Screen name="team" options={{ animation: 'slide_from_right' }} />
         </Stack>
         <StatusBar style="light" />

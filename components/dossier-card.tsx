@@ -55,6 +55,8 @@ export function DossierCard({ dossier, role, onPress, isSelected }: DossierCardP
         <StatusBlock
           label="Après travaux"
           status={dossier.apresStatus}
+          ref={dossier.apresRef}
+          date={dossier.apresDate}
         />
       </View>
 
