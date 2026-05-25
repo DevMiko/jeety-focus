@@ -38,7 +38,7 @@ export function DossierCard({ dossier, role, onPress, isSelected }: DossierCardP
           )}
         </View>
         <View style={styles.badges}>
-          {dossier.types.map((t) => (
+          {[...new Set(dossier.types)].map((t) => (
             <TypeBadge key={t} type={t} />
           ))}
         </View>

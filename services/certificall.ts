@@ -1,40 +1,19 @@
-// ─── SDK Certificall — Intégration React Native ─────────────────────────────
-//
-// Package : @certificall/trust-sdk-rn (disponible mi-avril 2026)
-//
-// ┌──────────────────────────────────────────────────────────────────────────┐
-// │  QUAND LE SDK EST PUBLIÉ :                                              │
-// │  1. npm install @certificall/trust-sdk-rn                               │
-// │  2. Passer SDK_AVAILABLE à true ci-dessous                              │
-// │  3. Décommenter l'import réel (ligne ci-dessous)                        │
-// │  4. Remplacer CERTIFICALL_API_KEY par votre clé cert_sdk_...            │
-// │  5. eas build --platform all --profile development                      │
-// └──────────────────────────────────────────────────────────────────────────┘
-//
-// En attendant le SDK, le mode mock garde le fonctionnement actuel
-// (expo-camera + expo-location dans camera.tsx) avec des résultats simulés.
-// ─────────────────────────────────────────────────────────────────────────────
-
-// ── Décommenter quand le SDK est installé : ──
-// import { CertificallTrust } from '@certificall/trust-sdk-rn';
+import * as FileSystem from 'expo-file-system/legacy';
+import { CertificallTrust } from 'certificall-mobile-sdk-react-native';
 
 // ─── Configuration ──────────────────────────────────────────────────────────
 
-/** Remplacez par votre vraie clé API Certificall (format cert_sdk_...) */
-const CERTIFICALL_API_KEY = 'cert_sdk_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx';
+const CERTIFICALL_API_KEY = 'cer_sdk_372_6f542391562b9b58bb8bad264fbd73d81d966eb31084e9d7';
+const CERTIFICALL_API_BASE = 'https://dev.certificall.app/certificall/api';
+const CERTIFICALL_USERNAME = 'j.didi@jddev.com';
+const CERTIFICALL_PASSWORD = '6R_rNOCuUf';
+const CERTIFICALL_KEYCLOAK_TOKEN_URL = 'https://auth.certificall.app/realms/certificall-dev/protocol/openid-connect/token';
 
-/** 'sandbox' pour les tests, 'production' pour les vrais certificats */
-const CERTIFICALL_ENV: 'production' | 'sandbox' = 'sandbox';
-
-/**
- * Passez à true quand @certificall/trust-sdk-rn est installé.
- * En mode false, l'app utilise expo-camera + résultats simulés.
- */
-export const SDK_AVAILABLE = false;
+export const SDK_AVAILABLE = true;
 
 let isConfigured = false;
 
-// ─── Types (conformes au SDK Certificall PhotoResult) ────────────────────────
+// ─── Types ───────────────────────────────────────────────────────────────────
 
 export interface PhotoResult {
   itemId: string;
@@ -55,85 +34,185 @@ export interface CertificallReportSummary {
   photos: PhotoResult[];
 }
 
-// ─── Initialisation (appeler une seule fois au démarrage) ────────────────────
+// ─── Initialisation SDK ──────────────────────────────────────────────────────
 
 export async function initCertificall(): Promise<void> {
   if (isConfigured) return;
-
-  if (SDK_AVAILABLE) {
-    // await CertificallTrust.configure({
-    //   apiKey: CERTIFICALL_API_KEY,
-    //   environment: CERTIFICALL_ENV,
-    // });
-  }
-
+  await CertificallTrust.configure({
+    apiKey: CERTIFICALL_API_KEY,
+    baseUrl: 'https://dev.certificall.app/certificall/',
+    appVersion: '0.1.3',
+    debugMode: true,
+  });
   isConfigured = true;
 }
 
-// ─── Permissions (via SDK ou fallback) ───────────────────────────────────────
+// ─── Permissions ─────────────────────────────────────────────────────────────
 
-export async function requestCertificallPermissions(): Promise<{
-  camera: boolean;
-  location: boolean;
-}> {
-  if (SDK_AVAILABLE) {
-    // const cam = await CertificallTrust.requestCameraPermission();
-    // const loc = await CertificallTrust.requestLocationPermission();
-    // await CertificallTrust.requestMotionPermission(); // iOS uniquement
-    // return {
-    //   camera: cam.status === 'granted',
-    //   location: loc.status === 'granted',
-    // };
-  }
-
-  // En mode mock, les permissions sont gérées par camera.tsx (expo-camera/location)
-  return { camera: true, location: true };
+export async function requestCertificallPermissions(): Promise<{ camera: boolean; location: boolean }> {
+  let camera = true;
+  let location = true;
+  try {
+    if (typeof CertificallTrust.requestCameraPermission === 'function') {
+      camera = await CertificallTrust.requestCameraPermission();
+    }
+  } catch { /* méthode absente en v0.1.2 */ }
+  try {
+    if (typeof CertificallTrust.requestLocationPermission === 'function') {
+      const s = await CertificallTrust.requestLocationPermission();
+      location = s === 'granted' || s === 'authorizedWhenInUse' || s === 'authorizedAlways';
+    }
+  } catch { /* méthode absente en v0.1.2 */ }
+  try {
+    if (typeof CertificallTrust.requestMotionPermission === 'function') {
+      await CertificallTrust.requestMotionPermission();
+    }
+  } catch { /* méthode absente en v0.1.2 */ }
+  return { camera, location };
 }
 
-// ─── Capture photo certifiée ─────────────────────────────────────────────────
+// ─── REST API — Authentification ─────────────────────────────────────────────
+
+let _cachedJWT: string | null = null;
+let _jwtExpiry = 0;
+
+export async function getCertificallJWT(): Promise<string> {
+  if (_cachedJWT && Date.now() < _jwtExpiry) return _cachedJWT;
+
+  // Certificall /auth/token — username/password → JWT
+  try {
+    const res = await fetch(`${CERTIFICALL_API_BASE.replace('/api', '')}/auth/token`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: CERTIFICALL_USERNAME, password: CERTIFICALL_PASSWORD }),
+    });
+    console.log('[Certificall] /auth/token status:', res.status);
+    if (res.ok) {
+      const data = await res.json();
+      const token: string = data.token ?? data.access_token ?? data.jwt ?? '';
+      if (token) {
+        _cachedJWT = token;
+        _jwtExpiry = Date.now() + (data.expires_in ?? 3600) * 1000 - 30000;
+        console.log('[Certificall] JWT OK');
+        return token;
+      }
+    } else {
+      const err = await res.text();
+      console.warn('[Certificall] /auth/token error:', err.slice(0, 300));
+    }
+  } catch (e) {
+    console.warn('[Certificall] /auth/token exception:', e);
+  }
+
+  // Fallback : API key comme Bearer
+  console.log('[Certificall] Fallback: API key comme Bearer');
+  _cachedJWT = CERTIFICALL_API_KEY;
+  _jwtExpiry = Date.now() + 10 * 60 * 1000;
+  return _cachedJWT;
+}
+
+// ─── REST API — Récupération photo certifiée ──────────────────────────────────
+
+/**
+ * Interroge GET /cases?reportToken=... pour trouver l'URL de l'image
+ * d'un item Certificall. Retry jusqu'à 5 fois (le SDK peut prendre un moment).
+ */
+async function fetchCertificallItemUrl(caseId: string, itemId: string): Promise<string | null> {
+  const jwt = await getCertificallJWT();
+
+  for (let attempt = 0; attempt < 5; attempt++) {
+    if (attempt > 0) await new Promise(r => setTimeout(r, 2000));
+
+    try {
+      const res = await fetch(
+        `${CERTIFICALL_API_BASE}/cases?caseId=${encodeURIComponent(caseId)}&limit=10`,
+        { headers: { Authorization: `Bearer ${jwt}` } },
+      );
+      console.log('[Certificall] GET /cases status:', res.status, 'caseId:', caseId);
+      if (!res.ok) continue;
+      const raw = await res.text();
+      console.log('[Certificall] GET /cases body:', raw.slice(0, 500));
+      const data = JSON.parse(raw);
+      const cases = Array.isArray(data) ? data : (data.data ?? data.results ?? [data]);
+
+      for (const c of cases) {
+        const items: any[] = c.items ?? [];
+        const match = items.find((i) => String(i.itemId ?? i.id) === String(itemId));
+        const url = match?.imageUrl ?? match?.url ?? items[0]?.imageUrl ?? items[0]?.url ?? c.caseUrl;
+        if (url) return url;
+      }
+    } catch (e) {
+      console.warn('[Certificall] fetchCertificallItemUrl attempt', attempt, e);
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Télécharge la photo certifiée depuis Certificall et retourne
+ * l'URI locale dans le cache de l'app (pour uploader sur notre serveur).
+ */
+export async function downloadCertificallPhoto(
+  caseId: string,
+  itemId: string,
+  fileName: string,
+): Promise<string | null> {
+  if (!caseId || caseId === '0' || !itemId || itemId === '0') return null;
+
+  try {
+    const photoUrl = await fetchCertificallItemUrl(caseId, itemId);
+    if (!photoUrl) {
+      console.warn('[Certificall] Aucune URL trouvée pour caseId:', caseId, 'itemId:', itemId);
+      return null;
+    }
+
+    const localUri = (FileSystem.cacheDirectory ?? '') + fileName;
+    const jwt = await getCertificallJWT();
+
+    const { status } = await FileSystem.downloadAsync(photoUrl, localUri, {
+      headers: { Authorization: `Bearer ${jwt}` },
+    });
+
+    if (status !== 200) {
+      console.warn('[Certificall] Échec téléchargement photo, status:', status);
+      return null;
+    }
+
+    return localUri;
+  } catch (e) {
+    console.warn('[Certificall] downloadCertificallPhoto error:', e);
+    return null;
+  }
+}
+
+// ─── Capture photo certifiée (SDK) ───────────────────────────────────────────
 
 export async function takeCertifiedPhoto(
   reportToken: string,
   metadata?: Record<string, string>,
 ): Promise<PhotoResult> {
-  if (!SDK_AVAILABLE) {
-    throw new Error('SDK Certificall non disponible. Utilisez le mode expo-camera.');
-  }
+  const result = await CertificallTrust.takePhoto({ reportToken, metadata });
 
-  // const result = await CertificallTrust.takePhoto({ reportToken, metadata });
-  // return {
-  //   itemId: result.itemId,
-  //   caseId: result.caseId,
-  //   reportToken: result.reportToken,
-  //   imageUrl: result.imageUrl,
-  //   pdfUrl: result.pdfUrl,
-  //   geoloc: result.geoloc,
-  //   createdAt: result.createdAt,
-  // };
+  console.log('[Certificall] takePhoto raw result:', JSON.stringify(result));
 
-  throw new Error('SDK non installé');
-}
-
-// ─── Vérification intégrité (optionnel) ──────────────────────────────────────
-
-export async function verifyDeviceIntegrity(): Promise<{
-  isVerified: boolean;
-  reasons: string[];
-}> {
-  if (SDK_AVAILABLE) {
-    // return await CertificallTrust.verifyIntegrity();
-  }
-  return { isVerified: true, reasons: [] };
+  return {
+    itemId: String(result.itemId ?? ''),
+    caseId: String(result.caseId ?? ''),
+    reportToken,
+    imageUrl: '',
+    pdfUrl: '',
+    geoloc: { lat: 0, lng: 0 },
+    createdAt: new Date().toISOString(),
+  };
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-/** Construit le reportToken à partir du dossier + phase */
 export function buildReportToken(dossierId: string, phase: 'avant' | 'apres'): string {
   return `${dossierId}-${phase}`;
 }
 
-/** Construit un résumé de rapport à partir des photos capturées */
 export function buildReportSummary(
   photos: PhotoResult[],
   reportToken: string,
@@ -156,10 +235,6 @@ export function buildReportSummary(
   };
 }
 
-/**
- * Construit un PhotoResult mock à partir d'une capture expo-camera.
- * Utilisé uniquement quand SDK_AVAILABLE = false.
- */
 export function buildMockPhotoResult(
   reportToken: string,
   uri: string,

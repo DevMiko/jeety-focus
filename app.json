@@ -12,7 +12,10 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.itjdsolutions.jeetyfocus",
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSCameraUsageDescription": "Jeety Focus a besoin de votre caméra pour photographier les chantiers.",
+        "NSLocationWhenInUseUsageDescription": "Jeety Focus utilise votre position GPS pour horodater et géolocaliser les photos de chantier.",
+        "NSMotionUsageDescription": "Les capteurs de mouvement sont utilisés pour valider l'intégrité des photos certifiées."
       }
     },
     "android": {
@@ -29,7 +32,8 @@
         "android.permission.CAMERA",
         "android.permission.RECORD_AUDIO",
         "android.permission.ACCESS_COARSE_LOCATION",
-        "android.permission.ACCESS_FINE_LOCATION"
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_NETWORK_STATE"
       ]
     },
     "web": {

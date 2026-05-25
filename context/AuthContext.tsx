@@ -81,6 +81,7 @@ interface AuthContextType {
   getPhotoRequirements: (idCeeFiches: number[]) => Promise<PhotoRequirement[]>;
   getDossierPhotos: (idDossier: string) => Promise<DossierPhoto[]>;
   uploadPhoto: (data: FormData) => Promise<DossierPhoto | null>;
+  deletePhasePhotos: (dossierId: string, phase: string, idRapport?: number) => Promise<void>;
 
   // ─── PDF ─────────────────────────────────────────────────────────────────────
   getPdfUrl: (idRapport: number | string) => string;
@@ -606,6 +607,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  // ─── Delete phase photos ────────────────────────────────────────────────────
+
+  const deletePhasePhotos = async (dossierId: string, phase: string, idRapport?: number): Promise<void> => {
+    if (!usertoken) return;
+    return new Promise((resolve) => {
+      const payload: Record<string, string> = {
+        action: 'delete-phase-photos',
+        token: usertoken,
+        id_dossier: dossierId,
+        phase,
+      };
+      if (idRapport) payload.id_rapport = String(idRapport);
+      apiAction(payload, () => resolve(), () => resolve());
+    });
+  };
+
   // ─── PDF ────────────────────────────────────────────────────────────────────
 
   const getPdfUrl = (idRapport: number | string): string => {
@@ -809,6 +826,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         getPhotoRequirements,
         getDossierPhotos,
         uploadPhoto,
+        deletePhasePhotos,
         getPdfUrl,
         generatePdf,
         asyncSave,

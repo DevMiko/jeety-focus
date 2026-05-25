@@ -5,7 +5,7 @@ import { DOSSIERS_ARTISAN, DOSSIERS_OUVRIER, DOSSIERS_SOUSTRAITANT } from '@/con
 import { Colors, FontSize, FontWeight, Radius, Shadows } from '@/constants/theme';
 import { useAuth } from '@/context/AuthContext';
 import { useRole } from '@/hooks/use-role';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
     Alert,
@@ -25,7 +25,7 @@ export default function DetailScreen() {
   const params = useLocalSearchParams<{ id: string }>();
 
   // Use API dossiers if available, fallback to mock
-  const allDossiers = auth.dossiers.length > 0
+  const allDossiers = (auth.dossiers ?? []).length > 0
     ? auth.dossiers
     : role === 'artisan'
     ? DOSSIERS_ARTISAN
@@ -36,7 +36,7 @@ export default function DetailScreen() {
   const dossier: Dossier | undefined = allDossiers.find((d) => d.id === params.id) ?? allDossiers[0];
 
   // Calculer le statut avant/après depuis les rapports rattachés
-  const rattachedRapports = auth.rapports.filter((r) => dossier && String(r.id_dossier) === dossier.id);
+  const rattachedRapports = (auth.rapports ?? []).filter((r) => dossier && String(r.id_dossier) === dossier.id);
   const rapportAvant = rattachedRapports.find((r) => r.phase === 'Avant');
   const rapportApres = rattachedRapports.find((r) => r.phase === 'Après');
   const hasRapportAvant = !!rapportAvant;
@@ -55,6 +55,12 @@ export default function DetailScreen() {
   const [avantChecked, setAvantChecked] = useState<string[]>([]);
   const [apresChecked, setApresChecked] = useState<string[]>([]);
 
+  // Point vert uniquement si des photos ont été effectivement prises
+  const avantPhotosCount = (dossierPhotos ?? []).filter((p) => p.phase === 'avant').length;
+  const apresPhotosCount = (dossierPhotos ?? []).filter((p) => p.phase === 'apres').length;
+  const avantDone = hasRapportAvant && avantPhotosCount > 0;
+  const apresDone = hasRapportApres && apresPhotosCount > 0;
+
   // Load requirements + photos on mount
   useEffect(() => {
     if (!dossier) return;
@@ -69,7 +75,10 @@ export default function DetailScreen() {
     }
 
     // Load existing photos for this dossier
-    auth.getDossierPhotos(dossier.id).then(setDossierPhotos);
+    auth.getDossierPhotos(dossier.id).then((photos) => {
+      console.log('[Detail] dossierPhotos:', JSON.stringify(photos));
+      setDossierPhotos(photos);
+    });
 
     // Also load legacy local checklists (fallback)
     (async () => {
@@ -100,11 +109,14 @@ export default function DetailScreen() {
     });
   }, [dossier?.id]);
 
-  // Refresh photos after camera returns
-  const refreshPhotos = useCallback(() => {
-    if (!dossier) return;
-    auth.getDossierPhotos(dossier.id).then(setDossierPhotos);
-  }, [dossier?.id]);
+  // Refresh photos + rapports chaque fois que l'écran revient au premier plan
+  useFocusEffect(
+    useCallback(() => {
+      if (!dossier) return;
+      auth.getDossierPhotos(dossier.id).then(setDossierPhotos);
+      auth.refreshRapports().catch(() => {});
+    }, [dossier?.id])
+  );
 
   if (!dossier) {
     return (
@@ -153,7 +165,7 @@ export default function DetailScreen() {
 
           {/* Type badges */}
           <View style={styles.badges}>
-            {dossier.types.map((t: DossierType) => (
+            {[...new Set(dossier.types)].map((t: DossierType) => (
               <TypeBadge key={t} type={t} />
             ))}
           </View>
@@ -192,7 +204,7 @@ export default function DetailScreen() {
 
         {/* Avant travaux */}
         <View style={styles.sectionTitle}>
-          <View style={[styles.sectionDot, hasRapportAvant ? styles.dotGreen : styles.dotOrange]} />
+          <View style={[styles.sectionDot, avantDone ? styles.dotGreen : styles.dotOrange]} />
           <Text style={styles.sectionLabel}>Photos avant travaux</Text>
         </View>
         <PhotoChecklist
@@ -208,14 +220,17 @@ export default function DetailScreen() {
           rapportPdfUrl={rapportAvant ? auth.getPdfUrl(rapportAvant.id_rapport) : undefined}
           onStartCamera={async () => {
             try {
-              const id = await auth.createRapport({
-                phase: 'Avant',
-                types: dossier.types.join(','),
-                client_name: dossier.clientName,
-                client_address: dossier.address,
-                id_dossier: dossier.id,
-              });
+              const id = rapportAvant
+                ? rapportAvant.id_rapport
+                : await auth.createRapport({
+                    phase: 'Avant',
+                    types: dossier.types.join(','),
+                    client_name: dossier.clientName,
+                    client_address: dossier.address,
+                    id_dossier: dossier.id,
+                  });
               if (!id) { Alert.alert('Erreur', 'Impossible de créer le rapport.'); return; }
+              await auth.deletePhasePhotos(dossier.id, 'avant', id);
               router.push({
                 pathname: '/camera',
                 params: {
@@ -255,7 +270,7 @@ export default function DetailScreen() {
 
         {/* Après travaux */}
         <View style={[styles.sectionTitle, { marginTop: 12 }]}>
-          <View style={[styles.sectionDot, hasRapportApres ? styles.dotGreen : styles.dotOrange]} />
+          <View style={[styles.sectionDot, apresDone ? styles.dotGreen : styles.dotOrange]} />
           <Text style={styles.sectionLabel}>Photos après travaux</Text>
         </View>
         <PhotoChecklist
@@ -271,14 +286,17 @@ export default function DetailScreen() {
           rapportPdfUrl={rapportApres ? auth.getPdfUrl(rapportApres.id_rapport) : undefined}
           onStartCamera={async () => {
             try {
-              const id = await auth.createRapport({
-                phase: 'Après',
-                types: dossier.types.join(','),
-                client_name: dossier.clientName,
-                client_address: dossier.address,
-                id_dossier: dossier.id,
-              });
+              const id = rapportApres
+                ? rapportApres.id_rapport
+                : await auth.createRapport({
+                    phase: 'Après',
+                    types: dossier.types.join(','),
+                    client_name: dossier.clientName,
+                    client_address: dossier.address,
+                    id_dossier: dossier.id,
+                  });
               if (!id) { Alert.alert('Erreur', 'Impossible de créer le rapport.'); return; }
+              await auth.deletePhasePhotos(dossier.id, 'apres', id);
               router.push({
                 pathname: '/camera',
                 params: {

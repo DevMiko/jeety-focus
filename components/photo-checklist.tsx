@@ -1,8 +1,9 @@
 import type { DossierPhoto, DossierType, PhotoRequirement } from '@/constants/mock-data';
 import { PHOTOS_APRES, PHOTOS_AVANT } from '@/constants/mock-data';
 import { Colors, FontSize, FontWeight, Radius, Shadows } from '@/constants/theme';
-import React from 'react';
-import { Linking, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useAuth } from '@/context/AuthContext';
+import React, { useState } from 'react';
+import { Alert, Image, Linking, Modal, Pressable, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 interface PhotoChecklistProps {
   phase: 'avant' | 'apres';
@@ -13,11 +14,9 @@ interface PhotoChecklistProps {
   onToggle?: (label: string) => void;
   locked?: boolean;
   onStartCamera?: () => void;
-  /** Rapport info (when a report already exists for this phase) */
   rapportRef?: string;
   rapportDate?: string;
   rapportPdfUrl?: string;
-  /** Direct photo labels (e.g. from rapport photos) — overrides requirements/fallback */
   photoLabels?: string[];
 }
 
@@ -35,10 +34,12 @@ export function PhotoChecklist({
   rapportPdfUrl,
   photoLabels,
 }: PhotoChecklistProps) {
-  const hasRapport = !!rapportRef;
+  const { appBaseUrl } = useAuth();
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 
-  // Build checklist items
+  const hasRapport = !!rapportRef;
   const useApi = !!(requirements && requirements.length > 0);
+
   let items: { key: string; label: string; requirementId: number | null; isDone: boolean }[];
 
   if (photoLabels && photoLabels.length > 0) {
@@ -49,99 +50,151 @@ export function PhotoChecklist({
       isDone: true,
     }));
   } else {
-    const phaseRequirements = useApi
-      ? requirements.filter((r) => r.phase === phase)
-      : [];
-
+    const phaseRequirements = useApi ? (requirements ?? []).filter((r) => r.phase === phase) : [];
     const fallbackLabels = Array.from(
       new Set(types.flatMap((t) => (phase === 'avant' ? PHOTOS_AVANT[t] : PHOTOS_APRES[t])))
     );
-
     items = useApi
       ? phaseRequirements.map((r) => ({
           key: String(r.id_photo_requirement),
           label: r.label,
           requirementId: r.id_photo_requirement,
-          isDone: hasRapport || (photos || []).some((p) => p.id_photo_requirement === r.id_photo_requirement),
+          isDone: (photos || []).some((p) => p.id_photo_requirement === r.id_photo_requirement),
         }))
       : fallbackLabels.map((label) => ({
           key: label,
           label,
           requirementId: null as number | null,
-          isDone: hasRapport || checkedItems.includes(label),
+          isDone: checkedItems.includes(label),
         }));
   }
 
+  // Photos de la phase, dans l'ordre, pour le matching par index (photoLabels path)
+  const phasePhotos = (photos || []).filter((p) => p.phase === phase);
+  console.log('[PhotoChecklist] phase:', phase, 'phasePhotos:', JSON.stringify(phasePhotos));
+
+  const getPhotoUrl = (item: (typeof items)[0], index: number): string | null => {
+    let photo: DossierPhoto | undefined;
+    if (item.requirementId !== null) {
+      photo = phasePhotos.find((p) => p.id_photo_requirement === item.requirementId);
+    } else {
+      photo = phasePhotos[index];
+    }
+    if (!photo?.file_path) return null;
+    return appBaseUrl + photo.file_path;
+  };
+
   const doneCount = items.filter((i) => i.isDone).length;
 
-  // Status label + style
   const statusLabel = locked
     ? 'Verrouillé'
     : hasRapport
     ? `${rapportRef} • ${rapportDate}`
-    : `En attente`;
+    : 'En attente';
 
-  const statusStyle = locked
-    ? styles.statusLocked
-    : hasRapport
-    ? styles.statusDone
-    : styles.statusPending;
-
-  const cardBorderColor = locked
-    ? 'transparent'
-    : hasRapport
-    ? '#10b981'
-    : Colors.blue;
+  const statusStyle = locked ? styles.statusLocked : hasRapport ? styles.statusDone : styles.statusPending;
+  const allDone = items.length > 0 && doneCount === items.length;
+  const cardBorderColor = locked ? 'transparent' : allDone ? '#10b981' : Colors.blue;
 
   return (
-    <View style={[styles.card, { borderColor: cardBorderColor }, locked && styles.cardLocked]}>
-      <View style={styles.header}>
-        <Text style={styles.title}>
-          {items.length} photo{items.length > 1 ? 's' : ''}{hasRapport ? '' : ' requises'}
-        </Text>
-        <View style={[styles.statusTag, statusStyle]}>
-          <Text style={[styles.statusText, statusStyle]}>{statusLabel}</Text>
+    <>
+      <View style={[styles.card, { borderColor: cardBorderColor }, locked && styles.cardLocked]}>
+        <View style={styles.header}>
+          <Text style={styles.title}>
+            {items.length} photo{items.length > 1 ? 's' : ''}{hasRapport ? '' : ' requises'}
+          </Text>
+          <View style={[styles.statusTag, statusStyle]}>
+            <Text style={[styles.statusText, statusStyle]}>{statusLabel}</Text>
+          </View>
         </View>
-      </View>
 
-      <View style={styles.list}>
-        {items.map((item) => (
+        <View style={styles.list}>
+          {items.map((item, index) => {
+            const photoUrl = item.isDone ? getPhotoUrl(item, index) : null;
+            return (
+              <View key={item.key} style={[styles.item, item.isDone && styles.itemDone]}>
+                {/* Thumbnail cliquable si photo disponible */}
+                {photoUrl ? (
+                  <TouchableOpacity onPress={() => setPreviewUrl(photoUrl)} activeOpacity={0.8}>
+                    <Image
+                      source={{ uri: photoUrl }}
+                      style={styles.thumbnail}
+                      onError={() => console.warn('[PhotoChecklist] Image failed to load:', photoUrl)}
+                    />
+                  </TouchableOpacity>
+                ) : (
+                  <TouchableOpacity
+                    style={[styles.itemIcon, item.isDone && styles.itemIconDone]}
+                    onPress={() => !locked && !hasRapport && onToggle?.(item.label)}
+                    activeOpacity={locked || hasRapport ? 1 : 0.7}
+                    disabled={locked || useApi || hasRapport}
+                  >
+                    <Text style={styles.itemIconText}>{item.isDone ? '✓' : '📷'}</Text>
+                  </TouchableOpacity>
+                )}
+                <Text
+                  style={[styles.itemText, item.isDone && styles.itemTextDone]}
+                  numberOfLines={2}
+                >
+                  {item.label}
+                </Text>
+                {photoUrl && (
+                  <Text style={styles.zoomHint}>🔍</Text>
+                )}
+              </View>
+            );
+          })}
+        </View>
+
+        {!locked && onStartCamera && (
           <TouchableOpacity
-            key={item.key}
-            style={[styles.item, item.isDone && styles.itemDone]}
-            onPress={() => !locked && !hasRapport && onToggle?.(item.label)}
-            activeOpacity={locked || hasRapport ? 1 : 0.7}
-            disabled={locked || useApi || hasRapport}
+            style={styles.cameraBtn}
+            activeOpacity={0.85}
+            onPress={() => {
+              if (doneCount > 0) {
+                Alert.alert(
+                  'Reprendre les photos',
+                  `Les ${doneCount} photo${doneCount > 1 ? 's' : ''} existante${doneCount > 1 ? 's' : ''} seront supprimées. Continuer ?`,
+                  [
+                    { text: 'Annuler', style: 'cancel' },
+                    { text: 'Reprendre', style: 'destructive', onPress: onStartCamera },
+                  ],
+                );
+              } else {
+                onStartCamera();
+              }
+            }}
           >
-            <View style={[styles.itemIcon, item.isDone && styles.itemIconDone]}>
-              <Text style={styles.itemIconText}>{item.isDone ? '✓' : '📷'}</Text>
-            </View>
-            <Text style={[styles.itemText, item.isDone && styles.itemTextDone]} numberOfLines={2}>
-              {item.label}
+            <Text style={styles.cameraBtnText}>
+              {doneCount > 0 ? '📷 Reprendre les photos' : '📷 Prendre les photos'}
             </Text>
           </TouchableOpacity>
-        ))}
+        )}
+        {hasRapport && rapportPdfUrl && (
+          <TouchableOpacity
+            style={[styles.viewBtn, !locked && onStartCamera ? { marginTop: 8 } : undefined]}
+            onPress={() => Linking.openURL(rapportPdfUrl)}
+            activeOpacity={0.85}
+          >
+            <Text style={styles.viewBtnText}>📄 Voir le rapport</Text>
+          </TouchableOpacity>
+        )}
       </View>
 
-      {/* Bouton principal */}
-      {hasRapport && rapportPdfUrl ? (
-        <TouchableOpacity
-          style={styles.viewBtn}
-          onPress={() => Linking.openURL(rapportPdfUrl)}
-          activeOpacity={0.85}
-        >
-          <Text style={styles.viewBtnText}>✓ Voir le rapport</Text>
-        </TouchableOpacity>
-      ) : !locked && onStartCamera ? (
-        <TouchableOpacity
-          style={styles.cameraBtn}
-          onPress={onStartCamera}
-          activeOpacity={0.85}
-        >
-          <Text style={styles.cameraBtnText}>📷 Prendre les photos</Text>
-        </TouchableOpacity>
-      ) : null}
-    </View>
+      {/* Modale plein écran */}
+      <Modal visible={!!previewUrl} transparent animationType="fade" onRequestClose={() => setPreviewUrl(null)}>
+        <Pressable style={styles.modalBg} onPress={() => setPreviewUrl(null)}>
+          <Image
+            source={{ uri: previewUrl ?? '' }}
+            style={styles.previewImg}
+            resizeMode="contain"
+          />
+          <View style={styles.closeHint}>
+            <Text style={styles.closeHintText}>Appuyer pour fermer</Text>
+          </View>
+        </Pressable>
+      </Modal>
+    </>
   );
 }
 
@@ -205,8 +258,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#f0fdf4',
   },
   itemIcon: {
-    width: 24,
-    height: 24,
+    width: 36,
+    height: 36,
     borderRadius: 5,
     backgroundColor: Colors.gray200,
     alignItems: 'center',
@@ -216,7 +269,13 @@ const styles = StyleSheet.create({
     backgroundColor: '#dcfce7',
   },
   itemIconText: {
-    fontSize: 12,
+    fontSize: 14,
+  },
+  thumbnail: {
+    width: 36,
+    height: 36,
+    borderRadius: 5,
+    backgroundColor: Colors.gray200,
   },
   itemText: {
     flex: 1,
@@ -225,6 +284,10 @@ const styles = StyleSheet.create({
   },
   itemTextDone: {
     color: Colors.green,
+  },
+  zoomHint: {
+    fontSize: 12,
+    opacity: 0.5,
   },
   cameraBtn: {
     width: '100%',
@@ -253,5 +316,22 @@ const styles = StyleSheet.create({
     color: Colors.gray600,
     fontSize: FontSize.xl,
     fontWeight: FontWeight.semibold,
+  },
+  modalBg: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.92)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  previewImg: {
+    width: '100%',
+    height: '85%',
+  },
+  closeHint: {
+    marginTop: 16,
+  },
+  closeHintText: {
+    color: 'rgba(255,255,255,0.5)',
+    fontSize: FontSize.sm,
   },
 });

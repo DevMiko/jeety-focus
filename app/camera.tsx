@@ -8,6 +8,9 @@ import {
     buildMockPhotoResult,
     buildReportSummary,
     buildReportToken,
+    downloadCertificallPhoto,
+    initCertificall,
+    requestCertificallPermissions,
     takeCertifiedPhoto,
 } from '@/services/certificall';
 import { CameraView, useCameraPermissions } from 'expo-camera';
@@ -76,9 +79,37 @@ export default function CameraScreen() {
   const [locationGranted, setLocationGranted] = useState(false);
 
   useEffect(() => {
+    if (total === 0) {
+      router.back();
+      return;
+    }
     (async () => {
       const { status } = await Location.requestForegroundPermissionsAsync();
-      setLocationGranted(status === 'granted');
+      const granted = status === 'granted';
+      setLocationGranted(granted);
+
+      // Warm-up GPS : obtenir un fix avant d'appeler le SDK Certificall
+      // (le SDK a besoin d'une position en cache pour son analyse de confiance)
+      if (granted) {
+        try {
+          await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Low });
+          console.log('[Camera] GPS warm-up OK');
+        } catch (e) {
+          console.warn('[Camera] GPS warm-up failed (continuera sans GPS):', e);
+        }
+      }
+
+      if (SDK_AVAILABLE) {
+        try {
+          console.log('[Camera] Initialisation Certificall...');
+          await initCertificall();
+          console.log('[Camera] Certificall initialisé, demande permissions...');
+          await requestCertificallPermissions();
+          console.log('[Camera] Permissions Certificall OK');
+        } catch (e) {
+          console.warn('[Camera] Certificall init error:', e);
+        }
+      }
     })();
   }, []);
 
@@ -107,32 +138,47 @@ export default function CameraScreen() {
   const handleCaptureSDK = async () => {
     if (isCapturing || isSubmitting) return;
     setIsCapturing(true);
+    console.log('[Camera] handleCaptureSDK — reportToken:', reportToken, 'index:', currentIndex, 'label:', photoLabels[currentIndex]);
 
     try {
-      const result = await takeCertifiedPhoto(reportToken, {
+      console.log('[Camera] Appel takeCertifiedPhoto...');
+      const sdkCall = takeCertifiedPhoto(reportToken, {
         label: photoLabels[currentIndex],
         index: String(currentIndex),
         phase,
         dossierId,
       });
+      const sdkTimeout = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(Object.assign(new Error('Certificall timeout — fallback expo-camera'), { code: 'TIMEOUT' })), 30000)
+      );
+      const result = await Promise.race([sdkCall, sdkTimeout]);
 
-      // Upload vers le serveur — toujours via id_rapport
-      if (hasRapportId && result.uri) {
-        const formData = new FormData();
-        formData.append('id_rapport', rapportId);
-        formData.append('phase', phase);
-        formData.append('photo_label', photoLabels[currentIndex] || '');
-        formData.append('geolat', String(result.latitude ?? 0));
-        formData.append('geolng', String(result.longitude ?? 0));
-        formData.append('photo', {
-          uri: result.uri,
-          name: `photo_${rapportId}_${phase}_${currentIndex}.jpg`,
-          type: 'image/jpeg',
-        } as any);
+      // Téléchargement de la photo certifiée depuis Certificall → upload sur notre serveur
+      if (hasRapportId && result.caseId && result.caseId !== '0') {
         try {
-          await auth.uploadPhoto(formData);
+          const fileName = `photo_${rapportId}_${phase}_${currentIndex}.jpg`;
+          const localUri = await downloadCertificallPhoto(result.caseId, result.itemId, fileName);
+
+          if (localUri) {
+            const formData = new FormData();
+            formData.append('id_rapport', rapportId);
+            formData.append('phase', phase);
+            formData.append('photo_label', photoLabels[currentIndex] || '');
+            formData.append('geolat', '0');
+            formData.append('geolng', '0');
+            const req = apiRequirements[currentIndex];
+            if (req?.id) formData.append('id_photo_requirement', String(req.id));
+            formData.append('photo', {
+              uri: localUri,
+              name: fileName,
+              type: 'image/jpeg',
+            } as any);
+            await auth.uploadPhoto(formData);
+          } else {
+            console.warn('[Camera] Photo Certificall non disponible pour upload (caseId:', result.caseId, ')');
+          }
         } catch (e) {
-          console.warn('Upload photo error (SDK):', e);
+          console.warn('[Camera] Upload photo SDK error:', e);
         }
       }
 
@@ -146,8 +192,13 @@ export default function CameraScreen() {
         await finishSession([...next]);
       }
     } catch (err: any) {
-      if (err?.code === 'CANCELLED') return; // L'utilisateur a annulé — rien à faire
-      console.warn('Certificall capture error:', err);
+      if (err?.code === 'CANCELLED') {
+        console.log('[Camera] Certificall annulé par utilisateur');
+        return;
+      }
+      console.warn('[Camera] Certificall SDK error, fallback expo-camera. Code:', err?.code, 'Message:', err?.message ?? err);
+      setIsCapturing(false);
+      await handleCaptureMock();
     } finally {
       setIsCapturing(false);
     }
@@ -189,6 +240,8 @@ export default function CameraScreen() {
         formData.append('photo_label', photoLabels[currentIndex] || '');
         formData.append('geolat', String(lat));
         formData.append('geolng', String(lng));
+        const req = apiRequirements[currentIndex];
+        if (req?.id) formData.append('id_photo_requirement', String(req.id));
         formData.append('photo', {
           uri: photo.uri,
           name: `photo_${rapportId}_${phase}_${currentIndex}.jpg`,
@@ -263,8 +316,8 @@ export default function CameraScreen() {
 
   const { time, date } = getNow();
 
-  // ─── Permission: chargement (mock mode uniquement) ────────────────────────
-  if (!SDK_AVAILABLE && !cameraPermission) {
+  // ─── Permission: chargement ───────────────────────────────────────────────
+  if (!cameraPermission) {
     return (
       <SafeAreaView style={styles.permScreen}>
         <ActivityIndicator color={Colors.blue} size="large" />
@@ -272,8 +325,8 @@ export default function CameraScreen() {
     );
   }
 
-  // ─── Permission: refusée (mock mode uniquement) ───────────────────────────
-  if (!SDK_AVAILABLE && !cameraPermission?.granted) {
+  // ─── Permission: refusée ──────────────────────────────────────────────────
+  if (!cameraPermission?.granted) {
     return (
       <SafeAreaView style={styles.permScreen}>
         <Text style={styles.permIcon}>📷</Text>
@@ -295,13 +348,11 @@ export default function CameraScreen() {
   return (
     <View style={styles.screen}>
 
-      {/* Caméra en fond (mock mode uniquement) */}
-      {!SDK_AVAILABLE && (
-        <CameraView ref={cameraRef} style={StyleSheet.absoluteFill} facing="back" />
-      )}
+      {/* Preview caméra en fond */}
+      <CameraView ref={cameraRef} style={StyleSheet.absoluteFill} facing="back" />
 
-      {/* Flash (mock mode) */}
-      {!SDK_AVAILABLE && flash && <View style={styles.flashOverlay} />}
+      {/* Flash */}
+      {flash && <View style={styles.flashOverlay} />}
 
       {/* Overlay certification */}
       {isSubmitting && (
