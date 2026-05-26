@@ -86,14 +86,12 @@ export async function getCertificallJWT(): Promise<string> {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ username: CERTIFICALL_USERNAME, password: CERTIFICALL_PASSWORD }),
     });
-    console.log('[Certificall] /auth/token status:', res.status);
     if (res.ok) {
       const data = await res.json();
       const token: string = data.token ?? data.access_token ?? data.jwt ?? '';
       if (token) {
         _cachedJWT = token;
         _jwtExpiry = Date.now() + (data.expires_in ?? 3600) * 1000 - 30000;
-        console.log('[Certificall] JWT OK');
         return token;
       }
     } else {
@@ -105,7 +103,6 @@ export async function getCertificallJWT(): Promise<string> {
   }
 
   // Fallback : API key comme Bearer
-  console.log('[Certificall] Fallback: API key comme Bearer');
   _cachedJWT = CERTIFICALL_API_KEY;
   _jwtExpiry = Date.now() + 10 * 60 * 1000;
   return _cachedJWT;
@@ -128,10 +125,8 @@ async function fetchCertificallItemUrl(caseId: string, itemId: string): Promise<
         `${CERTIFICALL_API_BASE}/cases?caseId=${encodeURIComponent(caseId)}&limit=10`,
         { headers: { Authorization: `Bearer ${jwt}` } },
       );
-      console.log('[Certificall] GET /cases status:', res.status, 'caseId:', caseId);
       if (!res.ok) continue;
       const raw = await res.text();
-      console.log('[Certificall] GET /cases body:', raw.slice(0, 500));
       const data = JSON.parse(raw);
       const cases = Array.isArray(data) ? data : (data.data ?? data.results ?? [data]);
 
@@ -193,8 +188,6 @@ export async function takeCertifiedPhoto(
   metadata?: Record<string, string>,
 ): Promise<PhotoResult> {
   const result = await CertificallTrust.takePhoto({ reportToken, metadata });
-
-  console.log('[Certificall] takePhoto raw result:', JSON.stringify(result));
 
   return {
     itemId: String(result.itemId ?? ''),

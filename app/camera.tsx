@@ -93,19 +93,13 @@ export default function CameraScreen() {
       if (granted) {
         try {
           await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Low });
-          console.log('[Camera] GPS warm-up OK');
-        } catch (e) {
-          console.warn('[Camera] GPS warm-up failed (continuera sans GPS):', e);
-        }
+        } catch (_) { /* GPS indisponible au démarrage */ }
       }
 
       if (SDK_AVAILABLE) {
         try {
-          console.log('[Camera] Initialisation Certificall...');
           await initCertificall();
-          console.log('[Camera] Certificall initialisé, demande permissions...');
           await requestCertificallPermissions();
-          console.log('[Camera] Permissions Certificall OK');
         } catch (e) {
           console.warn('[Camera] Certificall init error:', e);
         }
@@ -138,10 +132,8 @@ export default function CameraScreen() {
   const handleCaptureSDK = async () => {
     if (isCapturing || isSubmitting) return;
     setIsCapturing(true);
-    console.log('[Camera] handleCaptureSDK — reportToken:', reportToken, 'index:', currentIndex, 'label:', photoLabels[currentIndex]);
 
     try {
-      console.log('[Camera] Appel takeCertifiedPhoto...');
       const sdkCall = takeCertifiedPhoto(reportToken, {
         label: photoLabels[currentIndex],
         index: String(currentIndex),
@@ -160,12 +152,20 @@ export default function CameraScreen() {
           const localUri = await downloadCertificallPhoto(result.caseId, result.itemId, fileName);
 
           if (localUri) {
+            let sdkLat = 0, sdkLng = 0;
+            if (locationGranted) {
+              try {
+                const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+                sdkLat = pos.coords.latitude;
+                sdkLng = pos.coords.longitude;
+              } catch (_) { /* GPS indisponible */ }
+            }
             const formData = new FormData();
             formData.append('id_rapport', rapportId);
             formData.append('phase', phase);
             formData.append('photo_label', photoLabels[currentIndex] || '');
-            formData.append('geolat', '0');
-            formData.append('geolng', '0');
+            formData.append('geolat', String(sdkLat));
+            formData.append('geolng', String(sdkLng));
             const req = apiRequirements[currentIndex];
             if (req?.id) formData.append('id_photo_requirement', String(req.id));
             formData.append('photo', {
@@ -276,6 +276,11 @@ export default function CameraScreen() {
   const finishSession = async (list: (PhotoResult | null)[]) => {
     setIsSubmitting(true);
     const validPhotos = list.filter(Boolean) as PhotoResult[];
+
+    // Régénérer le PDF avec les nouvelles photos
+    if (hasRapportId) {
+      try { await auth.generatePdf(rapportId); } catch (_) { /* non bloquant */ }
+    }
 
     try {
       const summary = buildReportSummary(validPhotos, reportToken);

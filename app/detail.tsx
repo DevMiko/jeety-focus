@@ -5,6 +5,7 @@ import { DOSSIERS_ARTISAN, DOSSIERS_OUVRIER, DOSSIERS_SOUSTRAITANT } from '@/con
 import { Colors, FontSize, FontWeight, Radius, Shadows } from '@/constants/theme';
 import { useAuth } from '@/context/AuthContext';
 import { useRole } from '@/hooks/use-role';
+import * as Location from 'expo-location';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
@@ -47,6 +48,17 @@ export default function DetailScreen() {
     return `${dt.getDate().toString().padStart(2, '0')}/${(dt.getMonth() + 1).toString().padStart(2, '0')}/${String(dt.getFullYear()).slice(2)}`;
   };
 
+  const getGps = async (): Promise<{ geolat: number; geolng: number }> => {
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') return { geolat: 0, geolng: 0 };
+      const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+      return { geolat: pos.coords.latitude, geolng: pos.coords.longitude };
+    } catch {
+      return { geolat: 0, geolng: 0 };
+    }
+  };
+
   // ─── Photo requirements + photos from API ────────────────────────────────
   const [requirements, setRequirements] = useState<PhotoRequirement[]>([]);
   const [dossierPhotos, setDossierPhotos] = useState<DossierPhoto[]>([]);
@@ -75,10 +87,7 @@ export default function DetailScreen() {
     }
 
     // Load existing photos for this dossier
-    auth.getDossierPhotos(dossier.id).then((photos) => {
-      console.log('[Detail] dossierPhotos:', JSON.stringify(photos));
-      setDossierPhotos(photos);
-    });
+    auth.getDossierPhotos(dossier.id).then(setDossierPhotos);
 
     // Also load legacy local checklists (fallback)
     (async () => {
@@ -220,6 +229,7 @@ export default function DetailScreen() {
           rapportPdfUrl={rapportAvant ? auth.getPdfUrl(rapportAvant.id_rapport) : undefined}
           onStartCamera={async () => {
             try {
+              const gps = await getGps();
               const id = rapportAvant
                 ? rapportAvant.id_rapport
                 : await auth.createRapport({
@@ -228,6 +238,7 @@ export default function DetailScreen() {
                     client_name: dossier.clientName,
                     client_address: dossier.address,
                     id_dossier: dossier.id,
+                    ...gps,
                   });
               if (!id) { Alert.alert('Erreur', 'Impossible de créer le rapport.'); return; }
               await auth.deletePhasePhotos(dossier.id, 'avant', id);
@@ -286,6 +297,7 @@ export default function DetailScreen() {
           rapportPdfUrl={rapportApres ? auth.getPdfUrl(rapportApres.id_rapport) : undefined}
           onStartCamera={async () => {
             try {
+              const gps = await getGps();
               const id = rapportApres
                 ? rapportApres.id_rapport
                 : await auth.createRapport({
@@ -294,6 +306,7 @@ export default function DetailScreen() {
                     client_name: dossier.clientName,
                     client_address: dossier.address,
                     id_dossier: dossier.id,
+                    ...gps,
                   });
               if (!id) { Alert.alert('Erreur', 'Impossible de créer le rapport.'); return; }
               await auth.deletePhasePhotos(dossier.id, 'apres', id);

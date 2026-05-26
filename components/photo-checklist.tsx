@@ -71,7 +71,6 @@ export function PhotoChecklist({
 
   // Photos de la phase, dans l'ordre, pour le matching par index (photoLabels path)
   const phasePhotos = (photos || []).filter((p) => p.phase === phase);
-  console.log('[PhotoChecklist] phase:', phase, 'phasePhotos:', JSON.stringify(phasePhotos));
 
   const getPhotoUrl = (item: (typeof items)[0], index: number): string | null => {
     let photo: DossierPhoto | undefined;
@@ -119,7 +118,6 @@ export function PhotoChecklist({
                     <Image
                       source={{ uri: photoUrl }}
                       style={styles.thumbnail}
-                      onError={() => console.warn('[PhotoChecklist] Image failed to load:', photoUrl)}
                     />
                   </TouchableOpacity>
                 ) : (

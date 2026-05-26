@@ -595,7 +595,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         headers: { 'Content-Type': 'multipart/form-data' },
         timeout: 30000,
       });
-      console.log('uploadPhoto response:', JSON.stringify(res.data));
       if (res.data.code === 'SUCCESS') {
         return res.data as DossierPhoto;
       }

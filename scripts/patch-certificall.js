@@ -1,21 +1,10 @@
 const fs = require('fs');
 const path = require('path');
 
-const ktFile = path.join(
-  __dirname, '..', 'node_modules',
-  'certificall-mobile-sdk-react-native',
-  'android', 'src', 'main', 'java',
-  'com', 'certificall', 'reactnative',
-  'CertificallTrustModule.kt'
-);
+const SDK_ROOT = path.join(__dirname, '..', 'node_modules', 'certificall-mobile-sdk-react-native');
 
-const gradleFile = path.join(
-  __dirname, '..', 'node_modules',
-  'certificall-mobile-sdk-react-native',
-  'android', 'build.gradle'
-);
-
-// ─── Patch 1 : build.gradle — chemin AAR dev → bundled libs/ ────────────────
+// ─── ANDROID Patch 1 : build.gradle — chemin AAR dev → bundled libs/ ─────────
+const gradleFile = path.join(SDK_ROOT, 'android', 'build.gradle');
 if (fs.existsSync(gradleFile)) {
   let gradle = fs.readFileSync(gradleFile, 'utf8');
   if (gradle.includes('../../../sdk/android') || gradle.includes('certificall-trust-sdk-debug.aar')) {
@@ -28,45 +17,86 @@ if (fs.existsSync(gradleFile)) {
       "implementation files(new File(sdkAarDir, 'certificall-trust-sdk-release.aar'))"
     );
     fs.writeFileSync(gradleFile, gradle, 'utf8');
-    console.log('patch-certificall: ✓ build.gradle patched (AAR path: libs/certificall-trust-sdk-release.aar).');
+    console.log('patch-certificall: Android build.gradle patched (AAR path: libs/certificall-trust-sdk-release.aar).');
   } else {
-    console.log('patch-certificall: build.gradle already OK, skipping.');
+    console.log('patch-certificall: Android build.gradle already OK, skipping.');
   }
 }
 
-// ─── Patch 2 : CertificallTrustModule.kt — RN 0.73+ compatibility ───────────
-if (!fs.existsSync(ktFile)) {
-  console.log('patch-certificall: KT file not found, skipping.');
-  process.exit(0);
-}
+// ─── ANDROID Patch 2 : CertificallTrustModule.kt — RN 0.73+ compatibility ────
+const ktFile = path.join(
+  SDK_ROOT, 'android', 'src', 'main', 'java',
+  'com', 'certificall', 'reactnative', 'CertificallTrustModule.kt'
+);
 
-let src = fs.readFileSync(ktFile, 'utf8');
-
-if (!src.includes('activity: Activity?') && !src.includes('intent: Intent?') && !src.includes('val activity = currentActivity')) {
-  console.log('patch-certificall: CertificallTrustModule.kt already patched, skipping.');
-  process.exit(0);
-}
-
-src = src.replace(
-  /override fun onActivityResult\(activity: Activity\?, requestCode: Int, resultCode: Int, data: Intent\?\) \{[\s\S]*?sdk\.handleActivityResult\(activity, requestCode, resultCode, data\)\s*\}/,
-  `override fun onActivityResult(activity: Activity, requestCode: Int, resultCode: Int, data: Intent?) {
+if (fs.existsSync(ktFile)) {
+  let src = fs.readFileSync(ktFile, 'utf8');
+  if (!src.includes('activity: Activity?') && !src.includes('intent: Intent?') && !src.includes('val activity = currentActivity')) {
+    console.log('patch-certificall: CertificallTrustModule.kt already patched, skipping.');
+  } else {
+    src = src.replace(
+      /override fun onActivityResult\(activity: Activity\?, requestCode: Int, resultCode: Int, data: Intent\?\) \{[\s\S]*?sdk\.handleActivityResult\(activity, requestCode, resultCode, data\)\s*\}/,
+      `override fun onActivityResult(activity: Activity, requestCode: Int, resultCode: Int, data: Intent?) {
         Log.d("CertificallRN", "Forwarding activity result to SDK (requestCode=\$requestCode, resultCode=\$resultCode)")
         sdk.handleActivityResult(activity, requestCode, resultCode, data)
     }`
-);
-
-src = src.replace(
-  'override fun onNewIntent(intent: Intent?) {',
-  'override fun onNewIntent(intent: Intent) {'
-);
-
-src = src.replace(
-  /val activity = currentActivity\s*\n\s*if \(activity == null\) \{\s*\n\s*promise\.reject\("CAMERA_ERROR", "No activity available"\)\s*\n\s*return\s*\n\s*\}/,
-  `val activity = reactContext.currentActivity ?: run {
+    );
+    src = src.replace(
+      'override fun onNewIntent(intent: Intent?) {',
+      'override fun onNewIntent(intent: Intent) {'
+    );
+    src = src.replace(
+      /val activity = currentActivity\s*\n\s*if \(activity == null\) \{\s*\n\s*promise\.reject\("CAMERA_ERROR", "No activity available"\)\s*\n\s*return\s*\n\s*\}/,
+      `val activity = reactContext.currentActivity ?: run {
             promise.reject("CAMERA_ERROR", "No activity available")
             return
         }`
-);
+    );
+    fs.writeFileSync(ktFile, src, 'utf8');
+    console.log('patch-certificall: CertificallTrustModule.kt patched for RN 0.73+ compatibility.');
+  }
+}
 
-fs.writeFileSync(ktFile, src, 'utf8');
-console.log('patch-certificall: ✓ CertificallTrustModule.kt patched for RN 0.73+ compatibility.');
+// ─── iOS Patch 1 : CertificallTrustRN.podspec — créer si absent ───────────────
+const podspecFile = path.join(SDK_ROOT, 'CertificallTrustRN.podspec');
+if (!fs.existsSync(podspecFile)) {
+  const podspec = `Pod::Spec.new do |s|
+  s.name         = "CertificallTrustRN"
+  s.version      = "0.1.3"
+  s.summary      = "Certificall Mobile SDK React Native Bridge"
+  s.description  = "React Native bridge for Certificall Trust SDK (iOS)"
+  s.homepage     = "https://certificall.app"
+  s.license      = { :type => "MIT" }
+  s.author       = "Certificall"
+  s.platform     = :ios, "16.0"
+  s.source       = { :path => "." }
+
+  s.source_files        = "ios/**/*.{m,swift}"
+  s.vendored_frameworks = "ios/CertificallTrust.xcframework"
+
+  s.dependency "React-Core"
+  s.swift_version = "5.7"
+end
+`;
+  fs.writeFileSync(podspecFile, podspec, 'utf8');
+  console.log('patch-certificall: CertificallTrustRN.podspec created.');
+} else {
+  console.log('patch-certificall: CertificallTrustRN.podspec already exists, skipping.');
+}
+
+// ─── iOS Patch 2 : react-native.config.js — ajouter plateforme iOS ────────────
+const rnConfigFile = path.join(SDK_ROOT, 'react-native.config.js');
+if (fs.existsSync(rnConfigFile)) {
+  const rnConfig = fs.readFileSync(rnConfigFile, 'utf8');
+  if (!rnConfig.includes('ios:')) {
+    const patched = rnConfig.replace(
+      /platforms:\s*\{/,
+      `platforms: {
+      ios: {},`
+    );
+    fs.writeFileSync(rnConfigFile, patched, 'utf8');
+    console.log('patch-certificall: react-native.config.js patched (iOS platform added).');
+  } else {
+    console.log('patch-certificall: react-native.config.js already has iOS config, skipping.');
+  }
+}
