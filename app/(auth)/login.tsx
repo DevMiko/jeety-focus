@@ -19,7 +19,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 // ─── Simple Login Form (all roles) ───────────────────────────────────────────
-function LoginForm({ onSubmit, error, isLoading }: { onSubmit: (email: string, password: string) => void; error?: string | null; isLoading?: boolean }) {
+function LoginForm({ onSubmit, error, isLoading, onForgotPassword }: { onSubmit: (email: string, password: string) => void; error?: string | null; isLoading?: boolean; onForgotPassword?: () => void }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   return (
@@ -52,7 +52,7 @@ function LoginForm({ onSubmit, error, isLoading }: { onSubmit: (email: string, p
       <TouchableOpacity style={[styles.btnPrimary, isLoading && { opacity: 0.7 }]} onPress={() => onSubmit(email, password)} disabled={isLoading} activeOpacity={0.85}>
         {isLoading ? <ActivityIndicator color={Colors.white} size="small" /> : <Text style={styles.btnPrimaryText}>Se connecter</Text>}
       </TouchableOpacity>
-      <TouchableOpacity style={styles.forgotLink}>
+      <TouchableOpacity style={styles.forgotLink} onPress={onForgotPassword}>
         <Text style={styles.forgotText}>Mot de passe oublié ?</Text>
       </TouchableOpacity>
     </View>
@@ -309,6 +309,10 @@ export default function LoginScreen() {
     router.replace('/(tabs)');
   };
 
+  const handleForgotPassword = () => {
+    router.push('/(auth)/forgot-password');
+  };
+
   const handleRegister = () => {
     setRole(role);
     router.replace('/(tabs)');
@@ -370,7 +374,7 @@ export default function LoginScreen() {
           {/* Form card */}
           <View style={styles.formCard}>
             {activeTab === 'login' || !hasRegisterFlow ? (
-              <LoginForm onSubmit={handleLogin} error={auth.loginError} isLoading={auth.isLoading} />
+              <LoginForm onSubmit={handleLogin} error={auth.loginError} isLoading={auth.isLoading} onForgotPassword={handleForgotPassword} />
             ) : role === 'soustraitant' ? (
               <SiretSignupForm onSubmit={handleRegister} />
             ) : (
