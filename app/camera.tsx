@@ -19,6 +19,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
 import {
     ActivityIndicator,
+    Alert,
     Platform,
     StyleSheet,
     Text,
@@ -173,12 +174,15 @@ export default function CameraScreen() {
               name: fileName,
               type: 'image/jpeg',
             } as any);
-            await auth.uploadPhoto(formData);
+            const uploaded = await auth.uploadPhoto(formData);
+            if (!uploaded) {
+              Alert.alert('Photo non sauvegardée', 'La photo a été prise mais n\'a pas pu être enregistrée sur le serveur. Vérifiez votre connexion et réessayez.');
+            }
           } else {
-            console.warn('[Camera] Photo Certificall non disponible pour upload (caseId:', result.caseId, ')');
+            Alert.alert('Photo non disponible', 'La photo certifiée n\'a pas pu être récupérée. Veuillez réessayer.');
           }
         } catch (e) {
-          console.warn('[Camera] Upload photo SDK error:', e);
+          Alert.alert('Erreur', 'Une erreur est survenue lors de l\'enregistrement de la photo. Veuillez réessayer.');
         }
       }
 
@@ -248,9 +252,12 @@ export default function CameraScreen() {
           type: 'image/jpeg',
         } as any);
         try {
-          await auth.uploadPhoto(formData);
+          const uploaded = await auth.uploadPhoto(formData);
+          if (!uploaded) {
+            Alert.alert('Photo non sauvegardée', 'La photo a été prise mais n\'a pas pu être enregistrée sur le serveur. Vérifiez votre connexion et réessayez.');
+          }
         } catch (e) {
-          console.warn('Upload photo error (mock):', e);
+          Alert.alert('Erreur', 'Une erreur est survenue lors de l\'enregistrement de la photo. Veuillez réessayer.');
         }
       }
 
@@ -264,7 +271,7 @@ export default function CameraScreen() {
         await finishSession([...next]);
       }
     } catch (err) {
-      console.warn('Capture error:', err);
+      Alert.alert('Erreur caméra', 'Impossible de prendre la photo. Vérifiez que la caméra est accessible et réessayez.');
     } finally {
       setIsCapturing(false);
     }

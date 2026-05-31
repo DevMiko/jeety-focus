@@ -42,9 +42,8 @@ export default function ForgotPasswordScreen() {
       } else {
         setError(res.data?.message || 'Une erreur est survenue.');
       }
-    } catch (e: any) {
-      const msg = e?.response?.data?.message || e?.response?.data || e?.message || JSON.stringify(e);
-      setError('Erreur: ' + msg);
+    } catch {
+      setError('Une erreur est survenue. Veuillez réessayer.');
     } finally {
       setIsLoading(false);
     }

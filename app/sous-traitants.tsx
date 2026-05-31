@@ -1,11 +1,11 @@
 import { Avatar } from '@/components/ui/avatar';
 import { InfoBox } from '@/components/ui/info-box';
-import type { SousTraitant } from '@/constants/mock-data';
+import type { ApiSousTraitant, SousTraitant } from '@/constants/mock-data';
 import { SOUS_TRAITANTS } from '@/constants/mock-data';
 import { Colors, FontSize, FontWeight, Radius, Shadows } from '@/constants/theme';
 import { useAuth } from '@/context/AuthContext';
 import { useRouter } from 'expo-router';
-import React, { useEffect, useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
     Alert,
     ScrollView,
@@ -21,30 +21,36 @@ const AVATAR_COLORS = ['#00965E', '#0ea5e9', '#8b5cf6', Colors.orange, Colors.pi
 export default function SousTraitantsScreen() {
   const router = useRouter();
   const auth = useAuth();
+  const [loadingId, setLoadingId] = useState<string | null>(null);
 
   useEffect(() => {
     auth.refreshTeam().catch(() => {});
   }, []);
 
-  const stList: SousTraitant[] = useMemo(() => {
-    if (auth.teamSousTraitants.length === 0) return SOUS_TRAITANTS;
-    return auth.teamSousTraitants.map((st) => ({
-      id: String(st.id_sous_traitant),
-      name: st.company_name,
-      siret: st.siret,
-      hasJeety: !!st.has_jeety,
-      rapportCount: st.rapport_count,
-    }));
-  }, [auth.teamSousTraitants]);
+  const apiList: ApiSousTraitant[] = auth.teamSousTraitants;
+  const useMock = apiList.length === 0;
 
-  const handleInvite = async (st: SousTraitant) => {
-    const success = await auth.inviteMember('sous-traitant', st.id);
-    Alert.alert(
-      'Envoyé ✓',
-      success
-        ? `Invitation envoyée à ${st.name}.`
-        : `L'invitation sera envoyée dès que la connexion sera rétablie.`
-    );
+  const handleInvite = async (idSousTraitant: string, name: string) => {
+    setLoadingId(idSousTraitant);
+    const success = await auth.inviteMember('sous-traitant', idSousTraitant);
+    setLoadingId(null);
+    if (success) {
+      Alert.alert('Invitation envoyée', `Un email d'invitation a été envoyé à ${name}.`);
+      auth.refreshTeam().catch(() => {});
+    } else {
+      Alert.alert('Erreur', 'Impossible d\'envoyer l\'invitation. Vérifiez que ce sous-traitant a un email enregistré dans le CRM Jeety.');
+    }
+  };
+
+  const getStatusBadge = (st: ApiSousTraitant) => {
+    if (st.has_jeety) return null;
+    if (st.status === 'en-attente') {
+      return <View style={styles.badgePending}><Text style={styles.badgePendingText}>En attente</Text></View>;
+    }
+    if (st.status === 'inactif' && st.invitation_sent_at) {
+      return <View style={styles.badgeRefused}><Text style={styles.badgeRefusedText}>Refusée</Text></View>;
+    }
+    return null;
   };
 
   return (
@@ -70,8 +76,73 @@ export default function SousTraitantsScreen() {
           text="Liaison automatique via SIRET — Les sous-traitants sont liés automatiquement via leur SIRET enregistré dans votre CRM Jeety."
         />
 
-        {/* ─── ST List ─── */}
-        {stList.map((st, index) => {
+        {/* ─── ST List (API) ─── */}
+        {!useMock && apiList.map((st, index) => {
+          const avatarColor = AVATAR_COLORS[index % AVATAR_COLORS.length];
+          const id = String(st.id_sous_traitant);
+          const isPending = st.status === 'en-attente';
+          const isRefused = st.status === 'inactif' && !!st.invitation_sent_at;
+          const isLoading = loadingId === id;
+          return (
+            <View key={id} style={styles.stCard}>
+              <Avatar
+                initials={st.company_name.slice(0, 2).toUpperCase()}
+                size={44}
+                backgroundColor={avatarColor}
+                borderRadius={Radius.md}
+              />
+              <View style={styles.stInfo}>
+                <Text style={styles.stName}>{st.company_name}</Text>
+                <Text style={styles.stSiret}>SIRET : {st.siret}</Text>
+                {st.has_jeety ? (
+                  <View style={styles.jeetyBadge}>
+                    <Text style={styles.jeetyText}>✓ Jeety Focus</Text>
+                    {st.rapport_count > 0 && (
+                      <Text style={styles.jeetyCount}> • {st.rapport_count} rapports</Text>
+                    )}
+                  </View>
+                ) : getStatusBadge(st)}
+              </View>
+              <View style={styles.actionCol}>
+                {st.has_jeety ? (
+                  <View style={styles.jeetyBadgeLg}>
+                    <Text style={styles.jeetyBadgeLgText}>✓ Jeety</Text>
+                  </View>
+                ) : isPending ? (
+                  <TouchableOpacity
+                    style={[styles.relancerBtn, isLoading && { opacity: 0.6 }]}
+                    onPress={() => handleInvite(id, st.company_name)}
+                    disabled={isLoading}
+                    activeOpacity={0.85}
+                  >
+                    <Text style={styles.relancerBtnText}>{isLoading ? '...' : 'Relancer'}</Text>
+                  </TouchableOpacity>
+                ) : isRefused ? (
+                  <TouchableOpacity
+                    style={[styles.inviteBtn, isLoading && { opacity: 0.6 }]}
+                    onPress={() => handleInvite(id, st.company_name)}
+                    disabled={isLoading}
+                    activeOpacity={0.85}
+                  >
+                    <Text style={styles.inviteBtnText}>{isLoading ? '...' : 'Ré-inviter'}</Text>
+                  </TouchableOpacity>
+                ) : (
+                  <TouchableOpacity
+                    style={[styles.inviteBtn, isLoading && { opacity: 0.6 }]}
+                    onPress={() => handleInvite(id, st.company_name)}
+                    disabled={isLoading}
+                    activeOpacity={0.85}
+                  >
+                    <Text style={styles.inviteBtnText}>{isLoading ? '...' : 'Inviter'}</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            </View>
+          );
+        })}
+
+        {/* ─── ST List (mock fallback) ─── */}
+        {useMock && SOUS_TRAITANTS.map((st, index) => {
           const avatarColor = AVATAR_COLORS[index % AVATAR_COLORS.length];
           return (
             <View key={st.id} style={styles.stCard}>
@@ -84,33 +155,15 @@ export default function SousTraitantsScreen() {
               <View style={styles.stInfo}>
                 <Text style={styles.stName}>{st.name}</Text>
                 <Text style={styles.stSiret}>SIRET : {st.siret}</Text>
-                {st.hasJeety && (
-                  <View style={styles.jeetyBadge}>
-                    <Text style={styles.jeetyText}>✓ Jeety</Text>
-                    {st.rapportCount !== undefined && (
-                      <Text style={styles.jeetyCount}> • {st.rapportCount} rapports</Text>
-                    )}
-                  </View>
-                )}
               </View>
-              {!st.hasJeety ? (
-                <TouchableOpacity
-                  style={styles.inviteBtn}
-                  onPress={() => handleInvite(st)}
-                  activeOpacity={0.85}
-                >
-                  <Text style={styles.inviteBtnText}>Inviter</Text>
-                </TouchableOpacity>
-              ) : (
-                <View style={styles.jeetyBadgeLg}>
-                  <Text style={styles.jeetyBadgeLgText}>✓ Jeety</Text>
-                </View>
-              )}
+              <TouchableOpacity style={styles.inviteBtn} activeOpacity={0.85}>
+                <Text style={styles.inviteBtnText}>Inviter</Text>
+              </TouchableOpacity>
             </View>
           );
         })}
 
-        {stList.length === 0 && (
+        {apiList.length === 0 && SOUS_TRAITANTS.length === 0 && (
           <View style={styles.emptyState}>
             <Text style={styles.emptyText}>Aucun sous-traitant</Text>
             <Text style={styles.emptySubtext}>Les sous-traitants seront liés automatiquement via leur SIRET depuis votre CRM Jeety.</Text>
@@ -209,6 +262,12 @@ const styles = StyleSheet.create({
     fontWeight: FontWeight.bold,
   },
 
+  // Action column
+  actionCol: {
+    alignItems: 'flex-end',
+    justifyContent: 'center',
+  },
+
   // Invite button
   inviteBtn: {
     backgroundColor: Colors.pink,
@@ -220,6 +279,47 @@ const styles = StyleSheet.create({
     color: Colors.white,
     fontSize: FontSize.base,
     fontWeight: FontWeight.bold,
+  },
+
+  // Relancer button
+  relancerBtn: {
+    backgroundColor: Colors.orange,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: Radius.md,
+  },
+  relancerBtnText: {
+    color: Colors.white,
+    fontSize: FontSize.base,
+    fontWeight: FontWeight.bold,
+  },
+
+  // Status badges inline
+  badgePending: {
+    marginTop: 3,
+    backgroundColor: '#fef3c7',
+    borderRadius: Radius.xs,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    alignSelf: 'flex-start',
+  },
+  badgePendingText: {
+    fontSize: FontSize.xs,
+    color: '#b45309',
+    fontWeight: FontWeight.semibold,
+  },
+  badgeRefused: {
+    marginTop: 3,
+    backgroundColor: '#fee2e2',
+    borderRadius: Radius.xs,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    alignSelf: 'flex-start',
+  },
+  badgeRefusedText: {
+    fontSize: FontSize.xs,
+    color: '#b91c1c',
+    fontWeight: FontWeight.semibold,
   },
 
   // Empty state

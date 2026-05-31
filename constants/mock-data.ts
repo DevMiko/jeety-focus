@@ -100,6 +100,10 @@ export interface ApiSousTraitant {
   company_name: string;
   siret: string;
   etat_administratif: string;
+  email: string;
+  status: 'actif' | 'inactif' | 'en-attente';
+  status_validation: 'pending' | 'validated';
+  invitation_sent_at: string | null;
   has_jeety: number;
   rapport_count: number;
 }
