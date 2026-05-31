@@ -80,8 +80,9 @@ export default function SousTraitantsScreen() {
         {!useMock && apiList.map((st, index) => {
           const avatarColor = AVATAR_COLORS[index % AVATAR_COLORS.length];
           const id = String(st.id_sous_traitant);
-          const isPending = st.status === 'en-attente';
-          const isRefused = st.status === 'inactif' && !!st.invitation_sent_at;
+          const hasBeenInvited = !!st.invitation_sent_at;
+          const isPending = hasBeenInvited && st.status === 'en-attente';
+          const isRefused = hasBeenInvited && st.status === 'inactif';
           const isLoading = loadingId === id;
           return (
             <View key={id} style={styles.stCard}>
@@ -115,7 +116,7 @@ export default function SousTraitantsScreen() {
                     disabled={isLoading}
                     activeOpacity={0.85}
                   >
-                    <Text style={styles.relancerBtnText}>{isLoading ? '...' : 'Relancer'}</Text>
+                    <Text style={styles.relancerBtnText}>{isLoading ? '...' : 'Relancer l\'invitation'}</Text>
                   </TouchableOpacity>
                 ) : isRefused ? (
                   <TouchableOpacity
@@ -124,7 +125,7 @@ export default function SousTraitantsScreen() {
                     disabled={isLoading}
                     activeOpacity={0.85}
                   >
-                    <Text style={styles.inviteBtnText}>{isLoading ? '...' : 'Ré-inviter'}</Text>
+                    <Text style={styles.inviteBtnText}>{isLoading ? '...' : 'Ré-inviter sur Jeety Focus'}</Text>
                   </TouchableOpacity>
                 ) : (
                   <TouchableOpacity
@@ -133,7 +134,7 @@ export default function SousTraitantsScreen() {
                     disabled={isLoading}
                     activeOpacity={0.85}
                   >
-                    <Text style={styles.inviteBtnText}>{isLoading ? '...' : 'Inviter'}</Text>
+                    <Text style={styles.inviteBtnText}>{isLoading ? '...' : 'Inviter sur Jeety Focus'}</Text>
                   </TouchableOpacity>
                 )}
               </View>
