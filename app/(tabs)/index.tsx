@@ -76,6 +76,13 @@ export default function ListScreen() {
   const [selectedOuvrier, setSelectedOuvrier] = useState<(typeof auth.teamOuvriers)[0] | null>(null);
   const [assigning, setAssigning] = useState(false);
 
+  // Charger l'équipe au montage (pour le modal d'affectation)
+  React.useEffect(() => {
+    if (role === 'soustraitant') {
+      auth.refreshTeam().catch(() => {});
+    }
+  }, [role]);
+
   // Pull-to-refresh
   const [refreshing, setRefreshing] = useState(false);
   const onRefresh = useCallback(async () => {
@@ -223,20 +230,6 @@ export default function ListScreen() {
             activeColor={Colors.green}
           />
         )}
-        {role === 'soustraitant' && (
-          <>
-            <FilterSeparator />
-            {selectionMode ? (
-              <TouchableOpacity style={styles.affecterBtn} onPress={exitSelectionMode} activeOpacity={0.8}>
-                <Text style={styles.affecterBtnText}>× Annuler</Text>
-              </TouchableOpacity>
-            ) : (
-              <TouchableOpacity style={styles.affecterBtn} onPress={() => setSelectionMode(true)} activeOpacity={0.8}>
-                <Text style={styles.affecterBtnText}>👤 Affecter aux ouvriers</Text>
-              </TouchableOpacity>
-            )}
-          </>
-        )}
       </FiltersBar>
 
       {/* ── Content ── */}
@@ -282,6 +275,13 @@ export default function ListScreen() {
 
       {/* ── FAB ── */}
       <Fab onPress={() => router.push('/create')} />
+
+      {/* ── Hint long press (sous-traitant, hors mode sélection) ── */}
+      {role === 'soustraitant' && !selectionMode && (
+        <View style={styles.longPressHint}>
+          <Text style={styles.longPressHintText}>Appui long sur un dossier pour affecter un ouvrier</Text>
+        </View>
+      )}
 
       {/* ── Barre d'action sélection ── */}
       {selectionMode && selectedIds.length > 0 && (
@@ -465,14 +465,19 @@ const styles = StyleSheet.create({
   modalBtnOutlineText: { color: Colors.gray700, fontSize: FontSize.md, fontWeight: FontWeight.semibold },
   modalBtnPrimaryText: { color: Colors.white, fontSize: FontSize.md, fontWeight: FontWeight.bold },
 
-  // Bouton "Affecter aux ouvriers"
-  affecterBtn: {
-    backgroundColor: Colors.blue,
-    paddingHorizontal: 10,
+  // Hint long press
+  longPressHint: {
+    backgroundColor: '#eff6ff',
     paddingVertical: 6,
-    borderRadius: Radius.md,
+    paddingHorizontal: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.gray200,
   },
-  affecterBtnText: { color: Colors.white, fontSize: FontSize.sm, fontWeight: FontWeight.semibold },
+  longPressHintText: {
+    fontSize: FontSize.xs,
+    color: Colors.blue,
+    textAlign: 'center',
+  },
 
   // Carte sélectionnée
   cardSelected: {
