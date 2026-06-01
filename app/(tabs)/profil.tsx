@@ -1,5 +1,5 @@
 import { Avatar } from '@/components/ui/avatar';
-import { OUVRIERS, SOUS_TRAITANTS } from '@/constants/mock-data';
+import { SOUS_TRAITANTS } from '@/constants/mock-data';
 import { Colors, FontSize, FontWeight, Radius, Shadows } from '@/constants/theme';
 import { useAuth } from '@/context/AuthContext';
 import { useRole } from '@/hooks/use-role';
@@ -61,9 +61,7 @@ export default function ProfilScreen() {
   const auth = useAuth();
 
   // Counts for badges
-  const ouvriersCount = auth.teamOuvriers.length > 0
-    ? auth.teamOuvriers.length
-    : OUVRIERS.length;
+  const ouvriersCount = auth.teamOuvriers.length;
 
   const stCount = auth.teamSousTraitants.length > 0
     ? auth.teamSousTraitants.length

@@ -2,7 +2,7 @@ import { AddMembreCard, MembreCard } from '@/components/membre-card';
 import { Avatar } from '@/components/ui/avatar';
 import { InfoBox } from '@/components/ui/info-box';
 import type { SousTraitant, TeamMember } from '@/constants/mock-data';
-import { OUVRIERS, OUVRIERS_ST, SOUS_TRAITANTS } from '@/constants/mock-data';
+import { SOUS_TRAITANTS } from '@/constants/mock-data';
 import { Colors, FontSize, FontWeight, Radius, Shadows } from '@/constants/theme';
 import { useAuth } from '@/context/AuthContext';
 import { useRole } from '@/hooks/use-role';
@@ -158,15 +158,8 @@ export default function TeamScreen() {
     auth.refreshTeam().catch(() => {});
   }, []);
 
-  // Map API data to TeamMember[] with fallback to mock
+  // Map API data to TeamMember[]
   const ouvriersList: TeamMember[] = useMemo(() => {
-    const fallback = role === 'soustraitant' ? OUVRIERS_ST : OUVRIERS;
-    if (
-      (role === 'soustraitant' && auth.teamOuvriers.length === 0) ||
-      (role !== 'soustraitant' && auth.teamOuvriers.length === 0)
-    ) {
-      return fallback;
-    }
     return auth.teamOuvriers.map((o) => ({
       id: String(o.id_ouvrier),
       firstName: o.prenom,
