@@ -43,7 +43,7 @@ function NavRow({
         <Text style={[styles.navLabel, danger && styles.navDanger]}>{label}</Text>
       </View>
       <View style={styles.navRight}>
-        {badge !== undefined && (
+        {badge !== undefined && badge > 0 && (
           <View style={[styles.navBadge, { backgroundColor: badgeColor ?? Colors.blue }]}>
             <Text style={styles.navBadgeText}>{badge}</Text>
           </View>
