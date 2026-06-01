@@ -83,7 +83,8 @@ export default function DetailScreen() {
       .filter((id): id is number => id !== null);
 
     if (idCeeFiches.length > 0) {
-      auth.getPhotoRequirements(idCeeFiches).then(setRequirements);
+      const dateDevis = dossier.dateSignatureDevis ?? undefined;
+      auth.getPhotoRequirements(idCeeFiches, dateDevis).then(setRequirements);
     }
 
     // Load existing photos for this dossier

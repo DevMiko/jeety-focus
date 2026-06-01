@@ -80,7 +80,7 @@ interface AuthContextType {
   loadChecklist: (dossierId: string, phase: string) => Promise<string[]>;
 
   // ─── Photos ─────────────────────────────────────────────────────────────────
-  getPhotoRequirements: (idCeeFiches: number[]) => Promise<PhotoRequirement[]>;
+  getPhotoRequirements: (idCeeFiches: number[], dateDevis?: string) => Promise<PhotoRequirement[]>;
   getDossierPhotos: (idDossier: string) => Promise<DossierPhoto[]>;
   uploadPhoto: (data: FormData) => Promise<DossierPhoto | null>;
   deletePhasePhotos: (dossierId: string, phase: string, idRapport?: number) => Promise<void>;
@@ -235,6 +235,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       assignedTo: d.ouvrier_assigne_name || rapApres?.operateur || rapAvant?.operateur || undefined,
       idOuvrierAssigne: d.id_ouvrier_assigne ?? null,
       isSousTraite: !!d.has_sous_traitant,
+      dateSignatureDevis: d.date_signature_devis ?? null,
     };
   };
 
@@ -588,14 +589,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // ─── Photo requirements ─────────────────────────────────────────────────────
 
-  const getPhotoRequirements = async (idCeeFiches: number[]): Promise<PhotoRequirement[]> => {
+  const getPhotoRequirements = async (idCeeFiches: number[], dateDevis?: string): Promise<PhotoRequirement[]> => {
     if (!usertoken || idCeeFiches.length === 0) return [];
+    const payload: Record<string, string> = {
+      action: 'get-photo-requirements',
+      token: usertoken,
+      id_cee_fiches: JSON.stringify(idCeeFiches),
+    };
+    if (dateDevis) payload.date_devis = dateDevis;
     return new Promise((resolve) => {
-      apiAction({
-        action: 'get-photo-requirements',
-        token: usertoken,
-        id_cee_fiches: JSON.stringify(idCeeFiches),
-      }, (res) => {
+      apiAction(payload, (res) => {
         resolve(res.data.requirements || []);
       }, () => {
         resolve([]);

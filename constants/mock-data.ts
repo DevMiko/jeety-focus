@@ -31,6 +31,7 @@ export interface Dossier {
   companyOrdre?: string;
   donneurOrdre?: string;
   isSousTraite?: boolean;
+  dateSignatureDevis?: string | null; // YYYY-MM-DD
 }
 
 export interface RapportLibre {
@@ -134,7 +135,6 @@ export interface ApiRapport {
 
 export interface PhotoRequirement {
   id_photo_requirement: number;
-  id_cee_fiche: number;
   phase: 'avant' | 'apres';
   label: string;
   description: string;
