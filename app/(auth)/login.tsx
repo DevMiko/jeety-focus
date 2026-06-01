@@ -177,7 +177,7 @@ function SiretSignupForm({ onSubmit }: { onSubmit: (token: string, data: any) =>
           <TouchableOpacity style={styles.btnOutline} onPress={() => setStep('siret')} activeOpacity={0.8}>
             <Text style={styles.btnOutlineText}>Ce n'est pas moi</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.btnPrimary} onPress={() => setStep('account')} activeOpacity={0.85}>
+          <TouchableOpacity style={[styles.btnPrimary, { flex: 1, marginTop: 0 }]} onPress={() => setStep('account')} activeOpacity={0.85}>
             <Text style={styles.btnPrimaryText}>C'est mon entreprise →</Text>
           </TouchableOpacity>
         </View>
@@ -338,7 +338,7 @@ function PhoneSignupForm({ onSubmit }: { onSubmit: (token: string, data: any) =>
           <TouchableOpacity style={styles.btnOutline} onPress={() => { setStep('phone'); setOuvrier(null); }} activeOpacity={0.8}>
             <Text style={styles.btnOutlineText}>Ce n'est pas moi</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.btnPrimary} onPress={() => setStep('account')} activeOpacity={0.85}>
+          <TouchableOpacity style={[styles.btnPrimary, { flex: 1, marginTop: 0 }]} onPress={() => setStep('account')} activeOpacity={0.85}>
             <Text style={styles.btnPrimaryText}>C'est moi ! →</Text>
           </TouchableOpacity>
         </View>
