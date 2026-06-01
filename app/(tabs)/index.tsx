@@ -18,6 +18,7 @@ import {
 import { Colors, FontSize, FontWeight, Radius } from '@/constants/theme';
 import { useAuth } from '@/context/AuthContext';
 import { useRole } from '@/hooks/use-role';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import React, { useCallback, useMemo, useState } from 'react';
 import {
@@ -60,6 +61,7 @@ const POSEUR_OPTIONS: FilterOption[] = [
 export default function ListScreen() {
   const router = useRouter();
   const auth = useAuth();
+  const insets = useSafeAreaInsets();
   const { dossiers: apiDossiers } = auth;
   const { role, user } = useRole();
   const [search, setSearch] = useState('');
@@ -299,7 +301,7 @@ export default function ListScreen() {
       {/* ── Modal Affecter à un ouvrier ── */}
       <Modal visible={assignModal} transparent animationType="slide" onRequestClose={() => setAssignModal(false)}>
         <Pressable style={styles.modalOverlay} onPress={() => setAssignModal(false)}>
-          <Pressable style={styles.assignModalCard} onPress={() => {}}>
+          <Pressable style={[styles.assignModalCard, { paddingBottom: Math.max(insets.bottom + 16, 24) }]} onPress={() => {}}>
             <Text style={styles.assignModalTitle}>Affecter à un ouvrier</Text>
             <Text style={styles.assignModalSub}>{selectedIds.length} dossier(s) sélectionné(s)</Text>
 
@@ -522,7 +524,6 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     padding: 24,
-    paddingBottom: 40,
     gap: 12,
   },
   assignModalTitle: { fontSize: FontSize['2xl'], fontWeight: FontWeight.bold, color: Colors.gray800 },

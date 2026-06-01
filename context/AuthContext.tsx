@@ -232,7 +232,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       avantDate: rapAvant ? formatDate(rapAvant.date) : undefined,
       apresRef: rapApres?.reference ?? undefined,
       apresDate: rapApres ? formatDate(rapApres.date) : undefined,
-      assignedTo: rapApres?.operateur || rapAvant?.operateur || d.ouvrier_assigne_name || undefined,
+      assignedTo: d.ouvrier_assigne_name || rapApres?.operateur || rapAvant?.operateur || undefined,
       idOuvrierAssigne: d.id_ouvrier_assigne ?? null,
       isSousTraite: !!d.has_sous_traitant,
     };
