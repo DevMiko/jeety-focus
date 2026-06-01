@@ -38,13 +38,16 @@ export default function AddOuvrierScreen() {
     }
     setLoading(true);
     try {
-      // TODO: appel API réel quand endpoint disponible
-      await new Promise((resolve) => setTimeout(resolve, 1200));
-      Alert.alert(
-        'Invitation envoyée ✓',
-        `Un SMS d'invitation a été envoyé à ${firstName} ${lastName} au ${phone}.`,
-        [{ text: 'OK', onPress: () => router.back() }]
-      );
+      const success = await auth.addOuvrier(firstName.trim(), lastName.trim(), phone.replace(/\s/g, ''));
+      if (success) {
+        Alert.alert(
+          'Ouvrier ajouté ✓',
+          `${firstName} ${lastName} a été ajouté à votre équipe.`,
+          [{ text: 'OK', onPress: () => router.back() }]
+        );
+      } else {
+        Alert.alert('Erreur', 'Impossible d\'ajouter l\'ouvrier. Vérifiez votre connexion.');
+      }
     } finally {
       setLoading(false);
     }
@@ -63,7 +66,7 @@ export default function AddOuvrierScreen() {
 
       <KeyboardAvoidingView
         style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
         <ScrollView
           style={styles.content}
@@ -142,21 +145,21 @@ export default function AddOuvrierScreen() {
             text={`${firstName || 'L\'ouvrier'} pourra prendre des photos libres et rattachées à vos dossiers CEE depuis Jeety Focus.`}
           />
         </ScrollView>
-      </KeyboardAvoidingView>
 
-      {/* ─── Submit Button ─── */}
-      <View style={styles.bottomBar}>
-        <TouchableOpacity
-          style={[styles.submitBtn, loading && styles.submitBtnLoading]}
-          onPress={handleSubmit}
-          disabled={loading}
-          activeOpacity={0.85}
-        >
-          <Text style={styles.submitBtnText}>
-            {loading ? 'Envoi en cours...' : '📨 Envoyer l\'invitation'}
-          </Text>
-        </TouchableOpacity>
-      </View>
+        {/* ─── Submit Button — à l'intérieur de la KAV pour remonter avec le clavier ─── */}
+        <View style={styles.bottomBar}>
+          <TouchableOpacity
+            style={[styles.submitBtn, loading && styles.submitBtnLoading]}
+            onPress={handleSubmit}
+            disabled={loading}
+            activeOpacity={0.85}
+          >
+            <Text style={styles.submitBtnText}>
+              {loading ? 'Envoi en cours...' : '📨 Envoyer l\'invitation'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
