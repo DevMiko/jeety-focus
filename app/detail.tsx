@@ -173,11 +173,21 @@ export default function DetailScreen() {
             <Text style={styles.heroPhone}>📞 {dossier.phone}</Text>
           </TouchableOpacity>
 
-          {/* Type badges */}
+          {/* Type badges + code opération */}
           <View style={styles.badges}>
-            {[...new Set(dossier.types)].map((t: DossierType) => (
-              <TypeBadge key={t} type={t} />
-            ))}
+            {[...new Set(dossier.types)].map((t: DossierType) => {
+              const codes = dossier.travaux
+                .filter((tv) => tv.type_travaux === t && tv.code_operation)
+                .map((tv) => tv.code_operation as string);
+              return (
+                <View key={t} style={styles.badgeGroup}>
+                  <TypeBadge type={t} />
+                  {codes.length > 0 && (
+                    <Text style={styles.opCode}>{codes.join(' · ')}</Text>
+                  )}
+                </View>
+              );
+            })}
           </View>
 
           {/* Assigned ouvrier */}
@@ -405,8 +415,19 @@ const styles = StyleSheet.create({
   },
   badges: {
     flexDirection: 'row',
-    gap: 4,
+    gap: 6,
     flexWrap: 'wrap',
+  },
+  badgeGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  opCode: {
+    fontSize: FontSize.xs,
+    color: 'rgba(255,255,255,0.65)',
+    fontWeight: FontWeight.medium,
+    letterSpacing: 0.2,
   },
   ouvrierTag: {
     marginTop: 8,
