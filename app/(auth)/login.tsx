@@ -228,7 +228,7 @@ function PhoneSignupForm({ onSubmit }: { onSubmit: (token: string, data: any) =>
   const [phone, setPhone] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [ouvrier, setOuvrier] = useState<{ id_ouvrier: number; nom: string; prenom: string; company_name: string } | null>(null);
+  const [ouvrier, setOuvrier] = useState<{ id_ouvrier: number; nom: string; prenom: string; company_name: string; email: string } | null>(null);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -245,6 +245,7 @@ function PhoneSignupForm({ onSubmit }: { onSubmit: (token: string, data: any) =>
       }, { timeout: 15000 });
       if (res.data?.code === 'SUCCESS') {
         setOuvrier(res.data);
+        setEmail(res.data.email || '');
         setStep('result');
       } else {
         setError(res.data?.message || 'Invitation introuvable');
