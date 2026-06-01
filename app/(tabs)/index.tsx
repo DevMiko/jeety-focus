@@ -459,15 +459,21 @@ const styles = StyleSheet.create({
 
   // Hint long press
   longPressHint: {
-    backgroundColor: '#eff6ff',
-    paddingVertical: 6,
-    paddingHorizontal: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.gray200,
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: Colors.blue,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   longPressHintText: {
-    fontSize: FontSize.xs,
-    color: Colors.blue,
+    fontSize: FontSize.base,
+    color: Colors.white,
+    fontWeight: FontWeight.semibold,
     textAlign: 'center',
   },
 
