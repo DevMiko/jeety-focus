@@ -54,12 +54,16 @@ export function PhotoChecklist({
     const fallbackLabels = Array.from(
       new Set(types.flatMap((t) => (phase === 'avant' ? PHOTOS_AVANT[t] : PHOTOS_APRES[t])))
     );
+    const phasePhotosByIndex = (photos || []).filter((p) => p.phase === phase);
     items = useApi
-      ? phaseRequirements.map((r) => ({
+      ? phaseRequirements.map((r, index) => ({
           key: String(r.id_photo_requirement),
           label: r.label,
           requirementId: r.id_photo_requirement,
-          isDone: (photos || []).some((p) => p.id_photo_requirement === r.id_photo_requirement),
+          // Matching par ID en priorité, fallback par index pour les photos prises avant le paramétrage
+          isDone:
+            (photos || []).some((p) => p.id_photo_requirement === r.id_photo_requirement) ||
+            phasePhotosByIndex.length > index,
         }))
       : fallbackLabels.map((label) => ({
           key: label,
@@ -76,6 +80,8 @@ export function PhotoChecklist({
     let photo: DossierPhoto | undefined;
     if (item.requirementId !== null) {
       photo = phasePhotos.find((p) => p.id_photo_requirement === item.requirementId);
+      // Fallback par index pour les photos prises avant le paramétrage (id_photo_requirement = 0)
+      if (!photo) photo = phasePhotos[index];
     } else {
       photo = phasePhotos[index];
     }
