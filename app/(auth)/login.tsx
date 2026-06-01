@@ -2,8 +2,11 @@ import type { Role } from '@/constants/mock-data';
 import { Colors, FontSize, FontWeight, Radius, Shadows } from '@/constants/theme';
 import { useAuth } from '@/context/AuthContext';
 import { useRole } from '@/hooks/use-role';
+import axios from 'axios';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useState } from 'react';
+
+const APP_BASE_URL = 'https://jeetydev.jddev.com/';
 import {
     ActivityIndicator,
     Image,
@@ -60,27 +63,66 @@ function LoginForm({ onSubmit, error, isLoading, onForgotPassword }: { onSubmit:
 }
 
 // ─── SIRET Signup (Sous-traitant) ─────────────────────────────────────────────
-function SiretSignupForm({ onSubmit }: { onSubmit: () => void }) {
+function SiretSignupForm({ onSubmit }: { onSubmit: (token: string, data: any) => void }) {
   const [step, setStep] = useState<'siret' | 'result' | 'account'>('siret');
   const [siret, setSiret] = useState('');
   const [loading, setLoading] = useState(false);
-  const [status, setStatus] = useState('');
+  const [error, setError] = useState('');
+  const [company, setCompany] = useState<{ id_sous_traitant: number; company_name: string; address: string; siret: string } | null>(null);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
 
-  const handleSearch = () => {
-    if (siret.length < 9) {
-      setStatus('SIRET invalide (14 chiffres requis)');
+  const handleSearch = async () => {
+    const cleaned = siret.replace(/\s/g, '');
+    if (cleaned.length !== 14) {
+      setError('Veuillez entrer un SIRET valide (14 chiffres)');
       return;
     }
     setLoading(true);
-    setStatus('Recherche en cours...');
-    setTimeout(() => {
+    setError('');
+    try {
+      const res = await axios.post(APP_BASE_URL + 'api/api.php', {
+        action: 'lookup-siret',
+        siret: cleaned,
+      }, { timeout: 15000 });
+      if (res.data?.code === 'SUCCESS') {
+        setCompany(res.data);
+        setStep('result');
+      } else {
+        setError(res.data?.message || 'Entreprise introuvable');
+      }
+    } catch {
+      setError('Impossible de contacter le serveur. Vérifiez votre connexion.');
+    } finally {
       setLoading(false);
-      setStatus('');
-      setStep('result');
-    }, 1200);
+    }
+  };
+
+  const handleRegister = async () => {
+    if (!company) return;
+    if (!email.trim() || !password) { setError('Email et mot de passe requis'); return; }
+    if (password.length < 8) { setError('Le mot de passe doit faire au moins 8 caractères'); return; }
+    if (password !== confirmPassword) { setError('Les mots de passe ne correspondent pas'); return; }
+    setLoading(true);
+    setError('');
+    try {
+      const res = await axios.post(APP_BASE_URL + 'api/api.php', {
+        action: 'register-soustraitant',
+        id_sous_traitant: company.id_sous_traitant,
+        email: email.trim(),
+        password,
+      }, { timeout: 15000 });
+      if (res.data?.code === 'SUCCESS') {
+        onSubmit(res.data.token, res.data.data);
+      } else {
+        setError(res.data?.message || 'Erreur lors de la création du compte');
+      }
+    } catch {
+      setError('Impossible de contacter le serveur. Vérifiez votre connexion.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   if (step === 'siret') {
@@ -97,10 +139,10 @@ function SiretSignupForm({ onSubmit }: { onSubmit: () => void }) {
               style={[styles.input, { flex: 1 }]}
               value={siret}
               onChangeText={setSiret}
-              placeholder="123 456 789 00012"
+              placeholder="12345678900012"
               placeholderTextColor={Colors.gray400}
               keyboardType="numeric"
-              maxLength={17}
+              maxLength={14}
             />
             <TouchableOpacity
               style={styles.searchBtn}
@@ -115,25 +157,21 @@ function SiretSignupForm({ onSubmit }: { onSubmit: () => void }) {
               )}
             </TouchableOpacity>
           </View>
-          {!!status && (
-            <Text style={[styles.statusText, loading ? styles.statusLoading : styles.statusError]}>
-              {status}
-            </Text>
-          )}
+          {!!error && <Text style={styles.statusError}>{error}</Text>}
         </View>
       </View>
     );
   }
 
-  if (step === 'result') {
+  if (step === 'result' && company) {
     return (
       <View style={styles.form}>
         <Text style={styles.formTitle}>Entreprise trouvée</Text>
         <View style={styles.resultCard}>
           <Text style={styles.resultLabel}>✓ ENTREPRISE IDENTIFIÉE</Text>
-          <Text style={styles.resultName}>Isol Therm SARL</Text>
-          <Text style={styles.resultAddress}>12 rue des Artisans, 75010 Paris</Text>
-          <Text style={styles.resultSiret}>SIRET : {siret || '456 789 123 00056'}</Text>
+          <Text style={styles.resultName}>{company.company_name}</Text>
+          {!!company.address && <Text style={styles.resultAddress}>{company.address}</Text>}
+          <Text style={styles.resultSiret}>SIRET : {company.siret}</Text>
         </View>
         <View style={styles.btnGroup}>
           <TouchableOpacity style={styles.btnOutline} onPress={() => setStep('siret')} activeOpacity={0.8}>
@@ -150,10 +188,13 @@ function SiretSignupForm({ onSubmit }: { onSubmit: () => void }) {
   return (
     <View style={styles.form}>
       <Text style={styles.formTitle}>Créer mon accès</Text>
-      <View style={styles.confirmedCard}>
-        <Text style={styles.confirmedName}>Isol Therm SARL</Text>
-        <Text style={styles.confirmedSub}>SIRET : {siret || '456 789 123 00056'}</Text>
-      </View>
+      {company && (
+        <View style={styles.confirmedCard}>
+          <Text style={styles.confirmedName}>{company.company_name}</Text>
+          <Text style={styles.confirmedSub}>SIRET : {company.siret}</Text>
+        </View>
+      )}
+      {!!error && <Text style={[styles.statusText, styles.statusError, { marginBottom: 8 }]}>{error}</Text>}
       <View style={styles.formGroup}>
         <Text style={styles.label}>Email professionnel</Text>
         <TextInput
@@ -174,8 +215,8 @@ function SiretSignupForm({ onSubmit }: { onSubmit: () => void }) {
         <Text style={styles.label}>Confirmer le mot de passe</Text>
         <TextInput style={styles.input} value={confirmPassword} onChangeText={setConfirmPassword} placeholder="••••••••" placeholderTextColor={Colors.gray400} secureTextEntry />
       </View>
-      <TouchableOpacity style={styles.btnPrimary} onPress={onSubmit} activeOpacity={0.85}>
-        <Text style={styles.btnPrimaryText}>Créer mon compte</Text>
+      <TouchableOpacity style={[styles.btnPrimary, loading && { opacity: 0.7 }]} onPress={handleRegister} disabled={loading} activeOpacity={0.85}>
+        {loading ? <ActivityIndicator color={Colors.white} size="small" /> : <Text style={styles.btnPrimaryText}>Créer mon compte</Text>}
       </TouchableOpacity>
     </View>
   );
@@ -313,7 +354,10 @@ export default function LoginScreen() {
     router.push('/(auth)/forgot-password');
   };
 
-  const handleRegister = () => {
+  const handleRegister = async (token?: string, data?: any) => {
+    if (token && data) {
+      await auth.loginWithToken(token, data);
+    }
     setRole(role);
     router.replace('/(tabs)');
   };
@@ -376,7 +420,7 @@ export default function LoginScreen() {
             {activeTab === 'login' || !hasRegisterFlow ? (
               <LoginForm onSubmit={handleLogin} error={auth.loginError} isLoading={auth.isLoading} onForgotPassword={handleForgotPassword} />
             ) : role === 'soustraitant' ? (
-              <SiretSignupForm onSubmit={handleRegister} />
+              <SiretSignupForm onSubmit={(token, data) => handleRegister(token, data)} />
             ) : (
               <PhoneSignupForm onSubmit={handleRegister} />
             )}

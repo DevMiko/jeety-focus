@@ -9,10 +9,11 @@ interface DossierCardProps {
   dossier: Dossier;
   role: Role;
   onPress: (dossier: Dossier) => void;
+  onLongPress?: (dossier: Dossier) => void;
   isSelected?: boolean;
 }
 
-export function DossierCard({ dossier, role, onPress, isSelected }: DossierCardProps) {
+export function DossierCard({ dossier, role, onPress, onLongPress, isSelected }: DossierCardProps) {
   const handlePhonePress = (e: any) => {
     e.stopPropagation();
     Linking.openURL(`tel:${dossier.phone.replace(/\s/g, '')}`);
@@ -22,6 +23,7 @@ export function DossierCard({ dossier, role, onPress, isSelected }: DossierCardP
     <TouchableOpacity
       style={[styles.card, isSelected && styles.cardSelected]}
       onPress={() => onPress(dossier)}
+      onLongPress={onLongPress ? () => onLongPress(dossier) : undefined}
       activeOpacity={0.85}
     >
       {/* Top row */}

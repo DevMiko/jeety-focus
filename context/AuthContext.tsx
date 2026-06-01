@@ -36,6 +36,7 @@ interface AuthContextType {
 
   // ─── Auth actions ───────────────────────────────────────────────────────────
   login: (email: string, password: string) => Promise<boolean>;
+  loginWithToken: (token: string, data: any) => Promise<void>;
   logout: () => Promise<void>;
   setRole: (role: Role) => void;
 
@@ -70,6 +71,7 @@ interface AuthContextType {
   addOuvrier: (firstName: string, lastName: string, phone: string) => Promise<boolean>;
   removeOuvrier: (idOuvrier: number | string) => Promise<boolean>;
   inviteMember: (type: 'ouvrier' | 'sous-traitant', id: number | string) => Promise<boolean>;
+  assignOuvrier: (idDossier: string, idOuvrier: number) => Promise<boolean>;
 
   // ─── Dynamic data ───────────────────────────────────────────────────────────
   searchAddresses: (query: string) => Promise<string[]>;
@@ -230,7 +232,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       avantDate: rapAvant ? formatDate(rapAvant.date) : undefined,
       apresRef: rapApres?.reference ?? undefined,
       apresDate: rapApres ? formatDate(rapApres.date) : undefined,
-      assignedTo: rapApres?.operateur || rapAvant?.operateur || undefined,
+      assignedTo: rapApres?.operateur || rapAvant?.operateur || d.ouvrier_assigne_name || undefined,
+      idOuvrierAssigne: d.id_ouvrier_assigne ?? null,
       isSousTraite: !!d.has_sous_traitant,
     };
   };
@@ -301,6 +304,38 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       console.log('Login error:', e);
       return false;
     }
+  };
+
+  // ─── Assign ouvrier ─────────────────────────────────────────────────────────
+
+  const assignOuvrier = async (idDossier: string, idOuvrier: number): Promise<boolean> => {
+    if (!usertoken) return false;
+    return new Promise((resolve) => {
+      apiAction({
+        action: 'assign-ouvrier',
+        token: usertoken,
+        id_dossier: idDossier,
+        id_ouvrier: String(idOuvrier),
+      }, () => resolve(true), () => resolve(false));
+    });
+  };
+
+  // ─── Login avec token direct (après inscription) ────────────────────────────
+
+  const loginWithToken = async (token: string, data: any): Promise<void> => {
+    const profile = mapApiUserProfile(data);
+    setUserData(profile);
+    setUserToken(token);
+    await secureSave('usertoken', token);
+    await asyncSave('userdata', JSON.stringify(profile));
+    const apiDossiers = (data?.dossiers || []).map(mapApiDossier);
+    setDossiers(apiDossiers);
+    await asyncSave('dossiers', JSON.stringify(apiDossiers));
+    const team = data?.team || {};
+    setTeamOuvriers(team.ouvriers || []);
+    setTeamSousTraitants(team.sous_traitants || []);
+    await asyncSave('teamOuvriers', JSON.stringify(team.ouvriers || []));
+    await asyncSave('teamSousTraitants', JSON.stringify(team.sous_traitants || []));
   };
 
   // ─── Récupérer les données utilisateur ──────────────────────────────────────
@@ -803,6 +838,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         dossiers,
         loginError,
         login,
+        loginWithToken,
         logout: doLogout,
         setRole,
         apiAction,
@@ -818,6 +854,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         addOuvrier,
         removeOuvrier,
         inviteMember,
+        assignOuvrier,
         searchAddresses,
         getCompanies,
         saveChecklist,

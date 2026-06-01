@@ -27,6 +27,7 @@ export interface Dossier {
   apresRef?: string;
   apresDate?: string;
   assignedTo?: string;
+  idOuvrierAssigne?: number | null;
   companyOrdre?: string;
   donneurOrdre?: string;
   isSousTraite?: boolean;

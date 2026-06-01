@@ -21,7 +21,10 @@ import { useRole } from '@/hooks/use-role';
 import { useRouter } from 'expo-router';
 import React, { useCallback, useMemo, useState } from 'react';
 import {
+    Alert,
     Image,
+    Modal,
+    Pressable,
     RefreshControl,
     ScrollView,
     StyleSheet,
@@ -65,6 +68,13 @@ export default function ListScreen() {
   const [poseurFilter, setPoseurFilter] = useState('tous');
   const [affectModal, setAffectModal] = useState(false);
   const [selectedDossier, setSelectedDossier] = useState<Dossier | null>(null);
+
+  // ─── Mode sélection multiple (affecter aux ouvriers) ─────────────────────
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [assignModal, setAssignModal] = useState(false);
+  const [selectedOuvrier, setSelectedOuvrier] = useState<(typeof auth.teamOuvriers)[0] | null>(null);
+  const [assigning, setAssigning] = useState(false);
 
   // Pull-to-refresh
   const [refreshing, setRefreshing] = useState(false);
@@ -112,10 +122,48 @@ export default function ListScreen() {
   }, [dossiers, search, stageFilter, typeFilter, poseurFilter]);
 
   const handleDossierPress = (dossier: Dossier) => {
+    if (selectionMode) {
+      setSelectedIds((prev) =>
+        prev.includes(dossier.id) ? prev.filter((id) => id !== dossier.id) : [...prev, dossier.id]
+      );
+      return;
+    }
     router.push({ pathname: '/detail', params: { id: dossier.id } });
   };
 
-  const headerTitle = role === 'ouvrier' ? 'Mes chantiers' : 'Mes dossiers';
+  const handleDossierLongPress = (dossier: Dossier) => {
+    if (role !== 'soustraitant') return;
+    if (!selectionMode) setSelectionMode(true);
+    setSelectedIds((prev) =>
+      prev.includes(dossier.id) ? prev : [...prev, dossier.id]
+    );
+  };
+
+  const exitSelectionMode = () => {
+    setSelectionMode(false);
+    setSelectedIds([]);
+    setSelectedOuvrier(null);
+  };
+
+  const handleConfirmAssign = async () => {
+    if (!selectedOuvrier || selectedIds.length === 0) return;
+    setAssigning(true);
+    let ok = true;
+    for (const id of selectedIds) {
+      const success = await auth.assignOuvrier(id, selectedOuvrier.id_ouvrier);
+      if (!success) ok = false;
+    }
+    setAssigning(false);
+    setAssignModal(false);
+    exitSelectionMode();
+    if (ok) {
+      await auth.refreshDossiers();
+    } else {
+      Alert.alert('Erreur', 'Certaines affectations ont échoué.');
+    }
+  };
+
+  const headerTitle = role === 'soustraitant' ? 'Chantiers sous-traités' : role === 'ouvrier' ? 'Mes chantiers' : 'Mes dossiers';
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -175,6 +223,20 @@ export default function ListScreen() {
             activeColor={Colors.green}
           />
         )}
+        {role === 'soustraitant' && (
+          <>
+            <FilterSeparator />
+            {selectionMode ? (
+              <TouchableOpacity style={styles.affecterBtn} onPress={exitSelectionMode} activeOpacity={0.8}>
+                <Text style={styles.affecterBtnText}>× Annuler</Text>
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity style={styles.affecterBtn} onPress={() => setSelectionMode(true)} activeOpacity={0.8}>
+                <Text style={styles.affecterBtnText}>👤 Affecter aux ouvriers</Text>
+              </TouchableOpacity>
+            )}
+          </>
+        )}
       </FiltersBar>
 
       {/* ── Content ── */}
@@ -199,14 +261,19 @@ export default function ListScreen() {
             <Text style={styles.emptyText}>Aucun dossier trouvé</Text>
           </View>
         ) : (
-          filtered.map((dossier) => (
-            <DossierCard
-              key={dossier.id}
-              dossier={dossier}
-              role={role ?? 'artisan'}
-              onPress={handleDossierPress}
-            />
-          ))
+          filtered.map((dossier) => {
+            const isSelected = selectedIds.includes(dossier.id);
+            return (
+              <DossierCard
+                key={dossier.id}
+                dossier={dossier}
+                role={role ?? 'artisan'}
+                onPress={handleDossierPress}
+                onLongPress={role === 'soustraitant' ? handleDossierLongPress : undefined}
+                isSelected={selectionMode && isSelected}
+              />
+            );
+          })
         )}
 
         {/* Bottom padding for FAB */}
@@ -216,34 +283,90 @@ export default function ListScreen() {
       {/* ── FAB ── */}
       <Fab onPress={() => router.push('/create')} />
 
-      {/* ── Modal Affectation (artisan/ST) ── */}
-      {selectedDossier && (
-        <AppModal
-          visible={affectModal}
-          onClose={() => setAffectModal(false)}
-          title="Affecter un intervenant"
-          footer={
-            <>
-              <TouchableOpacity
-                style={[styles.modalBtn, styles.modalBtnOutline]}
-                onPress={() => setAffectModal(false)}
-              >
+      {/* ── Barre d'action sélection ── */}
+      {selectionMode && selectedIds.length > 0 && (
+        <View style={styles.selectionBar}>
+          <Text style={styles.selectionBarText}>{selectedIds.length} sélectionné(s)</Text>
+          <TouchableOpacity style={styles.selectionBarBtn} onPress={() => setAssignModal(true)} activeOpacity={0.85}>
+            <Text style={styles.selectionBarBtnText}>👤 Affecter</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.selectionBarClose} onPress={exitSelectionMode}>
+            <Text style={styles.selectionBarCloseText}>✕</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {/* ── Modal Affecter à un ouvrier ── */}
+      <Modal visible={assignModal} transparent animationType="slide" onRequestClose={() => setAssignModal(false)}>
+        <Pressable style={styles.modalOverlay} onPress={() => setAssignModal(false)}>
+          <Pressable style={styles.assignModalCard} onPress={() => {}}>
+            <Text style={styles.assignModalTitle}>Affecter à un ouvrier</Text>
+            <Text style={styles.assignModalSub}>{selectedIds.length} dossier(s) sélectionné(s)</Text>
+
+            {auth.teamOuvriers.map((ouvrier) => {
+              const isChosen = selectedOuvrier?.id_ouvrier === ouvrier.id_ouvrier;
+              return (
+                <TouchableOpacity
+                  key={ouvrier.id_ouvrier}
+                  style={[styles.ouvrierRow, isChosen && styles.ouvrierRowSelected]}
+                  onPress={() => setSelectedOuvrier(isChosen ? null : ouvrier)}
+                  activeOpacity={0.8}
+                >
+                  <Avatar
+                    initials={((ouvrier.prenom?.[0] ?? '') + (ouvrier.nom?.[0] ?? '')).toUpperCase() || 'OV'}
+                    size={40}
+                    backgroundColor={Colors.blue}
+                    borderRadius={20}
+                  />
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.ouvrierName}>{ouvrier.prenom} {ouvrier.nom}</Text>
+                    <Text style={styles.ouvrierRole}>Ouvrier</Text>
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
+
+            {/* Warning réaffectation */}
+            {selectedOuvrier && selectedIds.length === 1 && (() => {
+              const dossier = filtered.find(d => d.id === selectedIds[0]);
+              if (!dossier) return null;
+              const ouvrierName = selectedOuvrier.prenom + ' ' + selectedOuvrier.nom;
+              const shortName = (selectedOuvrier.prenom?.[0] ?? '') + '. ' + (selectedOuvrier.nom ?? '');
+              if (dossier.assignedTo && dossier.assignedTo !== ouvrierName) {
+                const oldShort = dossier.assignedTo.split(' ')[0][0] + '. ' + dossier.assignedTo.split(' ').slice(1).join(' ');
+                return (
+                  <View style={styles.warningBox}>
+                    <Text style={styles.warningText}>
+                      {dossier.ref} sera réattribué de <Text style={{ fontWeight: '700' }}>{dossier.assignedTo}</Text> à <Text style={{ fontWeight: '700' }}>{shortName}</Text>
+                    </Text>
+                  </View>
+                );
+              }
+              if (dossier.assignedTo) {
+                return (
+                  <View style={styles.warningBox}>
+                    <Text style={styles.warningText}>{dossier.ref} est affecté à <Text style={{ fontWeight: '700' }}>{dossier.assignedTo}</Text></Text>
+                  </View>
+                );
+              }
+              return null;
+            })()}
+
+            <View style={styles.assignModalFooter}>
+              <TouchableOpacity style={[styles.modalBtn, styles.modalBtnOutline]} onPress={() => setAssignModal(false)}>
                 <Text style={styles.modalBtnOutlineText}>Annuler</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.modalBtn, styles.modalBtnPrimary]}
-                onPress={() => setAffectModal(false)}
+                style={[styles.modalBtn, styles.modalBtnPrimary, (!selectedOuvrier || assigning) && { opacity: 0.5 }]}
+                onPress={handleConfirmAssign}
+                disabled={!selectedOuvrier || assigning}
               >
-                <Text style={styles.modalBtnPrimaryText}>Confirmer</Text>
+                <Text style={styles.modalBtnPrimaryText}>{assigning ? '...' : 'Affecter'}</Text>
               </TouchableOpacity>
-            </>
-          }
-        >
-          <Text style={styles.modalDesc}>
-            Sélectionnez un ouvrier ou sous-traitant à affecter sur ce dossier.
-          </Text>
-        </AppModal>
-      )}
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -341,4 +464,87 @@ const styles = StyleSheet.create({
   modalBtnPrimary: { backgroundColor: Colors.blue },
   modalBtnOutlineText: { color: Colors.gray700, fontSize: FontSize.md, fontWeight: FontWeight.semibold },
   modalBtnPrimaryText: { color: Colors.white, fontSize: FontSize.md, fontWeight: FontWeight.bold },
+
+  // Bouton "Affecter aux ouvriers"
+  affecterBtn: {
+    backgroundColor: Colors.blue,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: Radius.md,
+  },
+  affecterBtnText: { color: Colors.white, fontSize: FontSize.sm, fontWeight: FontWeight.semibold },
+
+  // Carte sélectionnée
+  cardSelected: {
+    borderRadius: Radius.xl,
+    borderWidth: 2,
+    borderColor: Colors.blue,
+    marginBottom: 2,
+  },
+
+  // Barre d'action en bas
+  selectionBar: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: Colors.blue,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    gap: 12,
+  },
+  selectionBarText: { flex: 1, color: Colors.white, fontSize: FontSize.md, fontWeight: FontWeight.semibold },
+  selectionBarBtn: {
+    backgroundColor: Colors.white,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: Radius.md,
+  },
+  selectionBarBtnText: { color: Colors.blue, fontSize: FontSize.base, fontWeight: FontWeight.bold },
+  selectionBarClose: { padding: 6 },
+  selectionBarCloseText: { color: Colors.white, fontSize: FontSize.xl, fontWeight: FontWeight.bold },
+
+  // Modal affecter ouvrier
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  assignModalCard: {
+    backgroundColor: Colors.white,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: 24,
+    paddingBottom: 40,
+    gap: 12,
+  },
+  assignModalTitle: { fontSize: FontSize['2xl'], fontWeight: FontWeight.bold, color: Colors.gray800 },
+  assignModalSub: { fontSize: FontSize.base, color: Colors.gray500, marginBottom: 4 },
+  ouvrierRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    padding: 12,
+    borderRadius: Radius.lg,
+    borderWidth: 2,
+    borderColor: Colors.gray100,
+    backgroundColor: Colors.gray50,
+  },
+  ouvrierRowSelected: {
+    borderColor: Colors.blue,
+    backgroundColor: '#eff6ff',
+  },
+  ouvrierName: { fontSize: FontSize.lg, fontWeight: FontWeight.semibold, color: Colors.gray800 },
+  ouvrierRole: { fontSize: FontSize.sm, color: Colors.gray500 },
+  warningBox: {
+    backgroundColor: '#fef3c7',
+    borderRadius: Radius.md,
+    padding: 10,
+    borderLeftWidth: 3,
+    borderLeftColor: '#f59e0b',
+  },
+  warningText: { fontSize: FontSize.base, color: '#92400e' },
+  assignModalFooter: { flexDirection: 'row', gap: 10, marginTop: 8 },
 });
