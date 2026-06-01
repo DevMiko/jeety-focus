@@ -23,6 +23,7 @@ export default function AddOuvrierScreen() {
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [phone, setPhone] = useState('');
+  const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
 
   const formatPhone = (value: string) => {
@@ -36,15 +37,19 @@ export default function AddOuvrierScreen() {
       Alert.alert('Champs requis', 'Veuillez remplir tous les champs correctement.');
       return;
     }
+    const emailTrimmed = email.trim();
+    if (emailTrimmed && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailTrimmed)) {
+      Alert.alert('Email invalide', 'Veuillez saisir une adresse email valide.');
+      return;
+    }
     setLoading(true);
     try {
-      const success = await auth.addOuvrier(firstName.trim(), lastName.trim(), phone.replace(/\s/g, ''));
+      const success = await auth.addOuvrier(firstName.trim(), lastName.trim(), phone.replace(/\s/g, ''), emailTrimmed || undefined);
       if (success) {
-        Alert.alert(
-          'Ouvrier ajouté ✓',
-          `${firstName} ${lastName} a été ajouté à votre équipe.`,
-          [{ text: 'OK', onPress: () => router.back() }]
-        );
+        const msg = emailTrimmed
+          ? `${firstName} ${lastName} a été ajouté et recevra une invitation par email.`
+          : `${firstName} ${lastName} a été ajouté à votre équipe.`;
+        Alert.alert('Ouvrier ajouté ✓', msg, [{ text: 'OK', onPress: () => router.back() }]);
       } else {
         Alert.alert('Erreur', 'Impossible d\'ajouter l\'ouvrier. Vérifiez votre connexion.');
       }
@@ -78,7 +83,7 @@ export default function AddOuvrierScreen() {
           <InfoBox
             variant="info"
             icon="💡"
-            text="Comment ça marche ? — Un SMS d'invitation sera envoyé à l'ouvrier. Il pourra installer Jeety Focus et rejoindre votre équipe pour prendre des photos de chantier."
+            text="Comment ça marche ? — Si vous renseignez son email, l'ouvrier recevra une invitation pour télécharger Jeety Focus et rejoindre votre équipe."
           />
 
           {/* ─── Form ─── */}
@@ -132,8 +137,22 @@ export default function AddOuvrierScreen() {
                 placeholderTextColor={Colors.gray400}
                 keyboardType="phone-pad"
               />
+            </View>
+
+            <View style={styles.formGroup}>
+              <Text style={styles.formLabel}>Email <Text style={styles.optionalTag}>(optionnel)</Text></Text>
+              <TextInput
+                style={styles.formInput}
+                value={email}
+                onChangeText={setEmail}
+                placeholder="prenom.nom@exemple.fr"
+                placeholderTextColor={Colors.gray400}
+                keyboardType="email-address"
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
               <Text style={styles.formHelp}>
-                Un SMS d'invitation sera envoyé à ce numéro.
+                Une invitation de téléchargement sera envoyée à cette adresse.
               </Text>
             </View>
           </View>
@@ -249,6 +268,11 @@ const styles = StyleSheet.create({
     fontSize: FontSize.sm,
     color: Colors.gray400,
     marginTop: 4,
+  },
+  optionalTag: {
+    fontSize: FontSize.sm,
+    fontWeight: FontWeight.regular,
+    color: Colors.gray400,
   },
 
   // Bottom bar

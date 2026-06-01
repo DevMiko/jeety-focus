@@ -68,7 +68,7 @@ interface AuthContextType {
   changePassword: (oldPsw: string, newPsw: string) => Promise<string | null>;
 
   // ─── Team actions ───────────────────────────────────────────────────────────
-  addOuvrier: (firstName: string, lastName: string, phone: string) => Promise<boolean>;
+  addOuvrier: (firstName: string, lastName: string, phone: string, email?: string) => Promise<boolean>;
   removeOuvrier: (idOuvrier: number | string) => Promise<boolean>;
   inviteMember: (type: 'ouvrier' | 'sous-traitant', id: number | string) => Promise<boolean>;
   assignOuvrier: (idDossier: string, idOuvrier: number) => Promise<boolean>;
@@ -463,7 +463,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // ─── Add ouvrier ────────────────────────────────────────────────────────────
 
-  const addOuvrier = async (firstName: string, lastName: string, phone: string): Promise<boolean> => {
+  const addOuvrier = async (firstName: string, lastName: string, phone: string, email?: string): Promise<boolean> => {
     if (!usertoken) return false;
     return new Promise((resolve) => {
       apiAction({
@@ -472,6 +472,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         prenom: firstName,
         nom: lastName,
         telephone: phone,
+        ...(email ? { email } : {}),
       }, () => {
         refreshTeam();
         resolve(true);
