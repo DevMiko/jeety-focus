@@ -223,20 +223,63 @@ function SiretSignupForm({ onSubmit }: { onSubmit: (token: string, data: any) =>
 }
 
 // ─── Phone Signup (Ouvrier) ───────────────────────────────────────────────────
-function PhoneSignupForm({ onSubmit }: { onSubmit: () => void }) {
+function PhoneSignupForm({ onSubmit }: { onSubmit: (token: string, data: any) => void }) {
   const [step, setStep] = useState<'phone' | 'result' | 'account'>('phone');
   const [phone, setPhone] = useState('');
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [ouvrier, setOuvrier] = useState<{ id_ouvrier: number; nom: string; prenom: string; company_name: string } | null>(null);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
 
-  const handleSearch = () => {
+  const handleSearch = async () => {
+    const digits = phone.replace(/\D/g, '');
+    if (digits.length < 10) { setError('Veuillez entrer un numéro valide'); return; }
     setLoading(true);
-    setTimeout(() => {
+    setError('');
+    try {
+      const res = await axios.post(APP_BASE_URL + 'api/api.php', {
+        action: 'lookup-ouvrier',
+        telephone: digits,
+      }, { timeout: 15000 });
+      if (res.data?.code === 'SUCCESS') {
+        setOuvrier(res.data);
+        setStep('result');
+      } else {
+        setError(res.data?.message || 'Invitation introuvable');
+      }
+    } catch {
+      setError('Impossible de contacter le serveur.');
+    } finally {
       setLoading(false);
-      setStep('result');
-    }, 1200);
+    }
+  };
+
+  const handleRegister = async () => {
+    if (!ouvrier) return;
+    if (!email.trim() || !password) { setError('Email et mot de passe requis'); return; }
+    if (password.length < 8) { setError('Mot de passe trop court (8 caractères minimum)'); return; }
+    if (password !== confirmPassword) { setError('Les mots de passe ne correspondent pas'); return; }
+    setLoading(true);
+    setError('');
+    try {
+      const res = await axios.post(APP_BASE_URL + 'api/api.php', {
+        action: 'register-ouvrier',
+        id_ouvrier: ouvrier.id_ouvrier,
+        email: email.trim(),
+        password,
+      }, { timeout: 15000 });
+      if (res.data?.code === 'SUCCESS') {
+        onSubmit(res.data.token, res.data.data);
+      } else {
+        setError(res.data?.message || 'Erreur lors de la création du compte');
+      }
+    } catch {
+      setError('Impossible de contacter le serveur.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   if (step === 'phone') {
@@ -244,7 +287,7 @@ function PhoneSignupForm({ onSubmit }: { onSubmit: () => void }) {
       <View style={styles.form}>
         <Text style={styles.formTitle}>Créer mon compte</Text>
         <Text style={styles.formHelp}>
-          Votre employeur vous a envoyé une invitation. Entrez votre numéro de téléphone pour la retrouver.
+          Votre employeur vous a ajouté à son équipe. Entrez votre numéro de téléphone pour retrouver votre invitation.
         </Text>
         <View style={styles.formGroup}>
           <Text style={styles.label}>Numéro de téléphone</Text>
@@ -271,24 +314,27 @@ function PhoneSignupForm({ onSubmit }: { onSubmit: () => void }) {
               )}
             </TouchableOpacity>
           </View>
+          {!!error && <Text style={styles.statusError}>{error}</Text>}
         </View>
       </View>
     );
   }
 
-  if (step === 'result') {
+  if (step === 'result' && ouvrier) {
     return (
       <View style={styles.form}>
         <Text style={styles.formTitle}>Invitation trouvée !</Text>
         <View style={styles.resultCard}>
           <Text style={styles.resultLabel}>✓ INVITATION TROUVÉE</Text>
-          <Text style={styles.resultName}>Lucas MARTIN</Text>
-          <Text style={styles.resultAddress}>
-            Ouvrier chez <Text style={{ color: Colors.blue, fontWeight: FontWeight.bold }}>Dupont Énergies</Text>
-          </Text>
+          <Text style={styles.resultName}>{ouvrier.prenom} {ouvrier.nom}</Text>
+          {!!ouvrier.company_name && (
+            <Text style={styles.resultAddress}>
+              Ouvrier chez <Text style={{ color: Colors.blue, fontWeight: FontWeight.bold }}>{ouvrier.company_name}</Text>
+            </Text>
+          )}
         </View>
         <View style={styles.btnGroup}>
-          <TouchableOpacity style={styles.btnOutline} onPress={() => setStep('phone')} activeOpacity={0.8}>
+          <TouchableOpacity style={styles.btnOutline} onPress={() => { setStep('phone'); setOuvrier(null); }} activeOpacity={0.8}>
             <Text style={styles.btnOutlineText}>Ce n'est pas moi</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.btnPrimary} onPress={() => setStep('account')} activeOpacity={0.85}>
@@ -302,10 +348,13 @@ function PhoneSignupForm({ onSubmit }: { onSubmit: () => void }) {
   return (
     <View style={styles.form}>
       <Text style={styles.formTitle}>Créer mon accès</Text>
-      <View style={styles.confirmedCard}>
-        <Text style={styles.confirmedName}>Lucas MARTIN ✓</Text>
-        <Text style={styles.confirmedSub}>Ouvrier chez Dupont Énergies</Text>
-      </View>
+      {ouvrier && (
+        <View style={styles.confirmedCard}>
+          <Text style={styles.confirmedName}>{ouvrier.prenom} {ouvrier.nom} ✓</Text>
+          {!!ouvrier.company_name && <Text style={styles.confirmedSub}>Ouvrier chez {ouvrier.company_name}</Text>}
+        </View>
+      )}
+      {!!error && <Text style={[styles.statusText, styles.statusError, { marginBottom: 8 }]}>{error}</Text>}
       <View style={styles.formGroup}>
         <Text style={styles.label}>Email</Text>
         <TextInput style={styles.input} value={email} onChangeText={setEmail} placeholder="vous@email.fr" placeholderTextColor={Colors.gray400} keyboardType="email-address" autoCapitalize="none" />
@@ -318,8 +367,8 @@ function PhoneSignupForm({ onSubmit }: { onSubmit: () => void }) {
         <Text style={styles.label}>Confirmer</Text>
         <TextInput style={styles.input} value={confirmPassword} onChangeText={setConfirmPassword} placeholder="••••••••" placeholderTextColor={Colors.gray400} secureTextEntry />
       </View>
-      <TouchableOpacity style={styles.btnPrimary} onPress={onSubmit} activeOpacity={0.85}>
-        <Text style={styles.btnPrimaryText}>Créer mon compte</Text>
+      <TouchableOpacity style={[styles.btnPrimary, loading && { opacity: 0.7 }]} onPress={handleRegister} disabled={loading} activeOpacity={0.85}>
+        {loading ? <ActivityIndicator color={Colors.white} size="small" /> : <Text style={styles.btnPrimaryText}>Créer mon compte</Text>}
       </TouchableOpacity>
     </View>
   );
@@ -422,7 +471,7 @@ export default function LoginScreen() {
             ) : role === 'soustraitant' ? (
               <SiretSignupForm onSubmit={(token, data) => handleRegister(token, data)} />
             ) : (
-              <PhoneSignupForm onSubmit={handleRegister} />
+              <PhoneSignupForm onSubmit={(token, data) => handleRegister(token, data)} />
             )}
           </View>
 
