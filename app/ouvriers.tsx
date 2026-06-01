@@ -1,7 +1,6 @@
 import { Avatar } from '@/components/ui/avatar';
 import { InfoBox } from '@/components/ui/info-box';
 import type { TeamMember } from '@/constants/mock-data';
-import { OUVRIERS, OUVRIERS_ST } from '@/constants/mock-data';
 import { Colors, FontSize, FontWeight, Radius, Shadows } from '@/constants/theme';
 import { useAuth } from '@/context/AuthContext';
 import { useRole } from '@/hooks/use-role';
@@ -29,8 +28,6 @@ export default function OuvriersScreen() {
   }, []);
 
   const ouvriersList: TeamMember[] = useMemo(() => {
-    const fallback = role === 'soustraitant' ? OUVRIERS_ST : OUVRIERS;
-    if (auth.teamOuvriers.length === 0) return fallback;
     return auth.teamOuvriers.map((o) => ({
       id: String(o.id_ouvrier),
       firstName: o.prenom,
@@ -41,7 +38,7 @@ export default function OuvriersScreen() {
       hasJeety: !!o.has_jeety,
       rapportCount: undefined,
     }));
-  }, [auth.teamOuvriers, role]);
+  }, [auth.teamOuvriers]);
 
   const handleInvite = async (m: TeamMember) => {
     Alert.alert('Invitation', `Renvoyer une invitation SMS à ${m.firstName} ${m.lastName} ?`, [
