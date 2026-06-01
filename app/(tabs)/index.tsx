@@ -10,11 +10,7 @@ import { Avatar } from '@/components/ui/avatar';
 import { Fab } from '@/components/ui/fab';
 import { SearchBar } from '@/components/ui/search-bar';
 import type { Dossier } from '@/constants/mock-data';
-import {
-    DOSSIERS_ARTISAN,
-    DOSSIERS_OUVRIER,
-    DOSSIERS_SOUSTRAITANT,
-} from '@/constants/mock-data';
+import { DOSSIERS_ARTISAN } from '@/constants/mock-data';
 import { Colors, FontSize, FontWeight, Radius } from '@/constants/theme';
 import { useAuth } from '@/context/AuthContext';
 import { useRole } from '@/hooks/use-role';
@@ -95,9 +91,8 @@ export default function ListScreen() {
 
   const dossiers = useMemo(() => {
     if (apiDossiers.length > 0) return apiDossiers;
-    if (role === 'soustraitant') return DOSSIERS_SOUSTRAITANT;
-    if (role === 'ouvrier') return DOSSIERS_OUVRIER;
-    return DOSSIERS_ARTISAN;
+    if (role === 'artisan') return DOSSIERS_ARTISAN;
+    return [];
   }, [role, apiDossiers]);
 
   const filtered = useMemo(() => {
