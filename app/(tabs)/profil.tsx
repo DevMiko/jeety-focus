@@ -145,13 +145,13 @@ export default function ProfilScreen() {
             <SectionTitle title="MON EMPLOYEUR" />
             <View style={[styles.card, { padding: 14, flexDirection: 'row', gap: 10, alignItems: 'center' }]}>
               <Avatar
-                initials="DE"
+                initials={user?.company ? user.company.split(' ').map((w: string) => w[0]).slice(0, 2).join('').toUpperCase() : '?'}
                 size={40}
                 backgroundColor={Colors.blue}
                 borderRadius={Radius.md}
               />
               <View style={{ flex: 1 }}>
-                <Text style={styles.employeurName}>{user?.employeur ?? 'Dupont Énergies'}</Text>
+                <Text style={styles.employeurName}>{user?.company || 'Non renseigné'}</Text>
                 <Text style={styles.employeurSub}>Entreprise employeur</Text>
               </View>
               <View style={styles.activeBadge}>
