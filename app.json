@@ -69,7 +69,15 @@
           "locationAlwaysAndWhenInUsePermission": "Jeety Focus utilise votre position GPS pour horodater et géolocaliser les photos de chantier."
         }
       ],
-      "expo-secure-store"
+      "expo-secure-store",
+      [
+        "expo-build-properties",
+        {
+          "ios": {
+            "deploymentTarget": "16.0"
+          }
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,
